@@ -1,0 +1,21 @@
+{
+  "name": "bazi-sazi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bazi-Sazi — a web-native game engine studio: build, play, publish and share 2D/3D/VR multiplayer games in the browser.",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "dev": "concurrently -k -n server,studio -c blue,magenta \"npm run dev -w @bazi/server\" \"npm run dev -w @bazi/studio\"",
+    "build": "npm run build -w @bazi/studio",
+    "start": "npm run start -w @bazi/server",
+    "typecheck": "tsc -p packages/engine --noEmit && tsc -p apps/studio --noEmit && tsc -p apps/server --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

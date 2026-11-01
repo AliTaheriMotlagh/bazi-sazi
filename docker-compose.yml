@@ -1,0 +1,33 @@
+# Production: `docker compose up -d --build`
+# Point a wildcard DNS record (*.games.example.com) AND games.example.com at this server.
+services:
+  studio:
+    build: .
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      BASE_DOMAIN: ${BASE_DOMAIN:-localhost:8787}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8787}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+    volumes:
+      - bazi-data:/data
+    ports:
+      - "8787:8787"
+
+  # Optional HTTPS with automatic certificates for every game subdomain.
+  # Enable with: docker compose --profile https up -d
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    environment:
+      DOMAIN: ${DOMAIN:-games.example.com}
+
+volumes:
+  bazi-data:
+  caddy-data:

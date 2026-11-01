@@ -1,0 +1,16 @@
+# HTTPS for the studio and every published game (<slug>.DOMAIN).
+# On-demand TLS issues a certificate the first time a game subdomain is visited;
+# the "ask" endpoint makes sure certificates are only issued for real games.
+{
+	on_demand_tls {
+		ask http://studio:8787/api/tls-check
+	}
+}
+
+{$DOMAIN}, *.{$DOMAIN} {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy studio:8787
+}

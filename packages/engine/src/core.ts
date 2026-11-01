@@ -1,0 +1,14 @@
+/**
+ * Lightweight entry: data model, templates, validation and docs — no three.js,
+ * no physics. Use it from pages that don't run games (home, explore, server).
+ */
+export * from './types';
+export * from './util';
+export * from './components/registry';
+export * from './project/defaults';
+export * from './project/templates';
+export * from './project/validate';
+export * from './project/summary';
+export { SCRIPT_API_DTS } from './docs/scriptApi';
+export { NODES, NODE_CATEGORIES, getNodeDef, type NodeDef, type PinDef, type PinKind, type NodeCategory } from './visual/nodes';
+export { compileScript } from './runtime/compile';
