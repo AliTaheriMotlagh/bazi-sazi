@@ -68,6 +68,15 @@ export interface AssetData {
   type: AssetType;
   url: string;
   size?: number;
+  /** Where a downloaded asset came from; shown to players/exported as credits when the licence asks for attribution. */
+  credit?: AssetCredit;
+}
+
+export interface AssetCredit {
+  title: string;
+  author?: string;
+  license: string;
+  sourceUrl: string;
 }
 
 export type ScriptLanguage = 'javascript' | 'typescript';

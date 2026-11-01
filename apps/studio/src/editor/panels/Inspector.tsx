@@ -17,6 +17,7 @@ import {
   setTransform,
   updateEntity,
 } from '../../store/commands';
+import { ImageCost, ModelPreviewCard, ObjectPerformance } from './PerformanceCard';
 import { editor, useEditor } from '../../store/editor';
 import { toast } from '../../store/ui';
 import { Icon } from '../../ui/Icon';
@@ -155,6 +156,7 @@ function EntityInspector({ entity }: { entity: EntityData }) {
         </div>
         <TagsInput value={entity.tags} onChange={(tags) => updateEntity(entity.id, (e) => void (e.tags = tags), 'Edit tags')} />
       </div>
+      <ObjectPerformance entityId={entity.id} signature={JSON.stringify([entity.components, entity.transform.scale])} />
       {playing && <LiveState id={entity.id} />}
       <div className="section">
         <div className="section-title" style={{ cursor: 'default' }}>
@@ -213,6 +215,13 @@ function AssetInspector() {
         <span className="badge accent" style={{ alignSelf: 'flex-start' }}>{asset.type}</span>
         <input className="input" value={asset.name} onChange={(e) => renameAsset(asset.id, e.target.value)} aria-label="Asset name" />
         {asset.type === 'image' && <img src={asset.url} alt={asset.name} style={{ maxWidth: '100%', borderRadius: 8, imageRendering: project.settings.graphics.pixelArt ? 'pixelated' : 'auto', background: 'repeating-conic-gradient(#8882 0 25%, transparent 0 50%) 0 0 / 16px 16px' }} />}
+        {asset.type === 'image' && <ImageCost url={asset.url} />}
+        {asset.type === 'model' && <ModelPreviewCard url={asset.url} name={asset.name} />}
+        {asset.credit && (
+          <div className="muted" style={{ fontSize: 12 }}>
+            Source: <a href={asset.credit.sourceUrl} target="_blank" rel="noopener noreferrer">{asset.credit.title}</a>{asset.credit.author ? ` by ${asset.credit.author}` : ''} · {asset.credit.license}
+          </div>
+        )}
         {asset.type === 'audio' && <audio controls src={asset.url} style={{ width: '100%' }} />}
         <div className="muted" style={{ fontSize: 12 }}>{asset.size ? `${(asset.size / 1024).toFixed(0)} KB` : ''} · drag it into the scene to use it</div>
         <button className="btn danger" onClick={() => (deleteAsset(asset.id), editor().set({ selectedAsset: null }))}><Icon name="Trash" size={14} /> Delete asset</button>

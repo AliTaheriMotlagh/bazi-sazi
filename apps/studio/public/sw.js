@@ -2,7 +2,11 @@
  * - Immutable files (hashed bundles, Starter Content, uploads) → cache-first.
  * - Pages → network-first, falling back to the cached copy when offline.
  * - API and WebSocket traffic is never cached. */
-const VERSION = 'bz-v4';
+const VERSION = 'bz-v5';
+/* Thumbnails from free-resource sites: cached on first sight so the browser opens instantly the next time. */
+const IMAGES = 'bz-remote-images-v1';
+const IMAGE_HOSTS = /^(cdn\.polyhaven\.com|dl\.polyhaven\.org|upload\.wikimedia\.org|media\.sketchfab\.com)$/;
+const MAX_REMOTE_IMAGES = 400;
 const CORE = ['/', '/player.html', '/favicon.svg', '/manifest.webmanifest'];
 const IMMUTABLE = /^\/(assets|samples|templates|icons|files)\//;
 
@@ -15,7 +19,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== IMAGES).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -24,6 +28,22 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  if (req.destination === 'image' && IMAGE_HOSTS.test(url.hostname)) {
+    event.respondWith(
+      caches.open(IMAGES).then(async (cache) => {
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        // Opaque (no-cors) responses can't be inspected but are fine to replay for <img>.
+        if (res.ok || res.type === 'opaque') {
+          cache.put(req, res.clone());
+          cache.keys().then((keys) => keys.length > MAX_REMOTE_IMAGES && cache.delete(keys[0]));
+        }
+        return res;
+      }),
+    );
+    return;
+  }
   if (url.origin !== location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/ws/')) return;
 
   if (IMMUTABLE.test(url.pathname)) {

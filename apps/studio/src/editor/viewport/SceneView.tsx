@@ -11,7 +11,7 @@ import { logToConsole } from '../../store/console';
 import { toast } from '../../store/ui';
 import { api } from '../../api/client';
 import { Icon } from '../../ui/Icon';
-import { useMenu } from '../../ui/primitives';
+import { Spinner, useMenu } from '../../ui/primitives';
 import { ACTIONS } from '../actions';
 import { toMenuItem } from '../MenuBar';
 import { useSession, viewportBridge } from '../session';
@@ -37,6 +37,28 @@ interface Tools {
   ortho: THREE.OrthographicCamera;
   grid: THREE.GridHelper;
   helper: ViewHelper | null;
+}
+
+/** Tells the user what the black viewport is waiting for: the engine starting, then models/textures downloading. */
+function LoadingOverlay({ ready }: { ready: boolean }) {
+  const runtime = useSession((s) => s.editRuntime);
+  const [state, setState] = useState({ loaded: 0, total: 0 });
+  useEffect(() => {
+    if (!runtime) return;
+    const update = () => setState(runtime.assets.loading);
+    update();
+    return runtime.assets.onLoadingChange(update);
+  }, [runtime]);
+  const busy = !ready || state.total > 0;
+  if (!busy) return null;
+  const pct = ready && state.total ? Math.round((state.loaded / state.total) * 100) : 0;
+  return (
+    <div className="vp-loading" role="status" aria-live="polite">
+      <Spinner />
+      <span>{ready ? `Loading models and textures… ${state.loaded}/${state.total}` : 'Starting the engine…'}</span>
+      {ready && <div className="vp-loading-bar"><i style={{ width: `${pct}%` }} /></div>}
+    </div>
+  );
 }
 
 /** Editor scene view: an edit-mode Runtime + editor camera, grid, gizmos and picking. */
@@ -433,6 +455,7 @@ export function SceneView() {
       onDrop={onDrop}
     >
       <canvas ref={canvas} className="scene-canvas" tabIndex={0} aria-label="Scene view" />
+      <LoadingOverlay ready={ready} />
       <ViewportToolbar mode={mode} />
       {viewport.stats && <StatsOverlay />}
       <div className="viewport-hint hide-phone">

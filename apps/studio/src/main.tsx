@@ -1,15 +1,17 @@
 import { StrictMode, Suspense, lazy, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { HomePage } from './pages/Home';
 import { ExplorePage } from './pages/Explore';
 import { LearnPage } from './pages/Learn';
 import { PlayPage } from './pages/Play';
+import { ResourcesPage } from './pages/Resources';
 import { useAuth } from './store/auth';
 import { editor } from './store/editor';
 import { startOfflineSync } from './store/offline';
 import { editorHost } from './editor/session';
 import { useUi } from './store/ui';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Spinner, Toasts } from './ui/primitives';
 import { registerServiceWorker } from './pwa';
 import './styles.css';
@@ -44,18 +46,22 @@ function App() {
       }),
     [],
   );
+  const { pathname } = useLocation();
   return (
     <>
-      <Suspense fallback={<Loading />}>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/explore" element={<ExplorePage />} />
-          <Route path="/play/:slug" element={<PlayPage />} />
-          <Route path="/learn" element={<LearnPage />} />
-          <Route path="/edit/:id" element={<EditorPage />} />
-          <Route path="*" element={<HomePage />} />
-        </Routes>
-      </Suspense>
+      <ErrorBoundary key={pathname}>
+        <Suspense fallback={<Loading />}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/explore" element={<ExplorePage />} />
+            <Route path="/play/:slug" element={<PlayPage />} />
+            <Route path="/learn" element={<LearnPage />} />
+            <Route path="/resources" element={<ResourcesPage />} />
+            <Route path="/edit/:id" element={<EditorPage />} />
+            <Route path="*" element={<HomePage />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
       <Toasts />
     </>
   );
@@ -70,3 +76,6 @@ createRoot(document.getElementById('root')!).render(
 );
 
 registerServiceWorker();
+
+// Handy for browser tests and debugging in the console (development only).
+if (import.meta.env.DEV) (window as unknown as { __bazi: unknown }).__bazi = { editor };

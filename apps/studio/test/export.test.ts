@@ -162,3 +162,20 @@ describe('game export', () => {
     await expect(exportHtml(project(), () => undefined)).rejects.toThrow(/build:standalone/);
   });
 });
+
+describe('credits for downloaded assets', () => {
+  it('lists attribution in CREDITS.txt (zip) and as a comment (html); nothing when no asset has a credit', async () => {
+    const { creditsText } = await import('../src/export/exportGame');
+    const p = createProject('Credit Game', '2d');
+    expect(creditsText(p)).toBe('');
+    p.assets.push({ id: 'a', name: 'Boom', type: 'audio', url: '/files/b.ogg', credit: { title: 'Explosion sound', author: 'Jane', license: 'CC BY 3.0', sourceUrl: 'https://commons.wikimedia.org/wiki/File:X' } });
+    const text = creditsText(p);
+    expect(text).toContain('Explosion sound by Jane — CC BY 3.0 — https://commons.wikimedia.org/wiki/File:X');
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => (url === '/standalone/player.js' ? new Response('x', { headers: { 'content-type': 'text/javascript' } }) : new Response(new Uint8Array([1]), { headers: { 'content-type': 'audio/ogg' } }))));
+    const zip = await readZip((await exportZip(p, () => undefined)).blob);
+    expect(new TextDecoder().decode(zip.get('CREDITS.txt'))).toContain('Jane');
+    const html = await (await exportHtml(p, () => undefined)).blob.text();
+    expect(html).toContain('<!--\nCredits for Credit Game');
+  });
+});

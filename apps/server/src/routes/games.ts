@@ -47,7 +47,9 @@ const SORTS: Record<string, string> = {
 export function gameRoutes(app: FastifyInstance, { db }: AppContext): void {
   const playLimiter = new RateLimiter(1, 1 / 600); // one counted play per IP per game per 10 min
 
-  app.get<{ Querystring: { q?: string; sort?: string; mode?: string; multiplayer?: string; limit?: string; offset?: string } }>('/api/games', async (req) => {
+  app.get<{ Querystring: { q?: string; sort?: string; mode?: string; multiplayer?: string; limit?: string; offset?: string } }>('/api/games', async (req, reply) => {
+    // Public listing: browsers and the CDN may reuse it briefly, which keeps Explore snappy under load.
+    if (!req.user) reply.header('cache-control', 'public, max-age=15, stale-while-revalidate=60');
     const { q, sort = 'popular', mode, multiplayer } = req.query;
     const limit = Math.min(60, Math.max(1, Number(req.query.limit) || 24));
     const offset = Math.max(0, Number(req.query.offset) || 0);

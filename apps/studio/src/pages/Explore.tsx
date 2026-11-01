@@ -85,7 +85,7 @@ export function ExplorePage() {
           <div className="empty"><Spinner /></div>
         ) : games.length === 0 ? (
           <div className="empty">
-            No games found. <Link to="/">Be the first to make one!</Link>
+            No games found. <Link className="btn" to="/">Be the first to make one!</Link>
           </div>
         ) : (
           <div className="grid">

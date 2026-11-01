@@ -24,7 +24,7 @@ const TYPES: Record<string, string> = {
   'font/ttf': '.ttf',
 };
 
-const BY_EXT: Record<string, string> = { '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.webm': 'video/webm' };
+export const BY_EXT: Record<string, string> = { '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.webm': 'video/webm' };
 
 export function assetRoutes(app: FastifyInstance, { db, config, files }: AppContext): void {
   app.addContentTypeParser(/^(image|audio|video|model|font)\/.+$|^application\/octet-stream$/, { parseAs: 'buffer', bodyLimit: config.limits.assetBytes }, (_req, body, done) => done(null, body));
@@ -35,15 +35,23 @@ export function assetRoutes(app: FastifyInstance, { db, config, files }: AppCont
     if (!me) return;
     const body = req.body;
     if (!Buffer.isBuffer(body) || body.length === 0) return reply.code(400).send({ error: 'Empty upload.' });
-    let mime = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
-    if (mime === 'application/octet-stream') mime = BY_EXT[path.extname(String(req.query.name ?? '')).toLowerCase()] ?? mime;
-    const ext = TYPES[mime];
-    if (!ext) return reply.code(415).send({ error: `Unsupported file type (${mime}). Use PNG/JPG/WebP/GIF/SVG, MP3/OGG/WAV, MP4/WebM or GLB/glTF.` });
-    const hash = createHash('sha256').update(body).digest('hex').slice(0, 40);
-    const url = await files.put(`${hash}${ext}`, body, mime);
-    await db.prepare('INSERT OR IGNORE INTO assets (hash, owner_id, mime, size, created_at) VALUES (?, ?, ?, ?, ?)').run(hash, me.sub, mime, body.length, Date.now());
-    return { url, size: body.length, mime };
+    const mime = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+    const stored = await storeAsset({ db, config, files }, me.sub, body, mime, String(req.query.name ?? ''));
+    if ('error' in stored) return reply.code(415).send({ error: stored.error });
+    return stored;
   });
+}
+
+/** Validates the type, stores the bytes content-addressed and records ownership. Shared by uploads and resource imports. */
+export async function storeAsset({ db, files }: AppContext, ownerId: string, body: Buffer, declaredMime: string, name: string): Promise<{ url: string; size: number; mime: string } | { error: string }> {
+  let mime = declaredMime;
+  if (mime === 'application/octet-stream' || !mime) mime = BY_EXT[path.extname(name).toLowerCase()] ?? mime;
+  const ext = TYPES[mime];
+  if (!ext) return { error: `Unsupported file type (${mime}). Use PNG/JPG/WebP/GIF/SVG, MP3/OGG/WAV, MP4/WebM or GLB/glTF.` };
+  const hash = createHash('sha256').update(body).digest('hex').slice(0, 40);
+  const url = await files.put(`${hash}${ext}`, body, mime);
+  await db.prepare('INSERT OR IGNORE INTO assets (hash, owner_id, mime, size, created_at) VALUES (?, ?, ?, ?, ?)').run(hash, ownerId, mime, body.length, Date.now());
+  return { url, size: body.length, mime };
 }
 
 export const FILES_HEADERS = {

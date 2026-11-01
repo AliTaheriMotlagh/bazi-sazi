@@ -4,15 +4,45 @@ import { useUi } from '../store/ui';
 import { Icon } from './Icon';
 
 // ───────────────────────── Modal
-export function Modal({ title, onClose, children, footer, wide, icon }: { title: string; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean; icon?: string }) {
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Dialog: closes on Escape/backdrop, keeps keyboard focus inside while open and gives it back on close.
+ * On phones it becomes a bottom sheet (or full screen with `full`) — see .modal in styles.css.
+ */
+export function Modal({ title, onClose, children, footer, wide, full, soft, icon }: { title: string; onClose(): void; children: ReactNode; footer?: ReactNode; wide?: boolean; full?: boolean; soft?: boolean; icon?: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const before = document.activeElement as HTMLElement | null;
+    const node = box.current;
+    // Move focus into the dialog unless a child already took it (autoFocus).
+    if (node && !node.contains(document.activeElement)) (node.querySelector<HTMLElement>('[autofocus], input, textarea, select') ?? node.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') return onCloseRef.current();
+      if (e.key !== 'Tab' || !node) return;
+      const items = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      before?.focus?.();
+    };
+  }, []);
   return createPortal(
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+    <div className={`modal-backdrop ${soft ? 'soft' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={box} className={`modal ${wide ? 'wide' : ''} ${full ? 'full' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           {icon && <Icon name={icon} size={18} />}
           <h2 className="grow">{title}</h2>

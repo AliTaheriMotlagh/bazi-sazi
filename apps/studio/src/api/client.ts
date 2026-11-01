@@ -1,3 +1,4 @@
+import { TtlMemo } from '../store/kv';
 import type { AssetData, PrefabData, ProjectData } from '@bazi/engine/core';
 
 const TOKEN_KEY = 'bz.token';
@@ -161,6 +162,25 @@ export const api = {
   like: (slug: string) => post<{ liked: boolean; likes: number }>(`/api/games/${slug}/like`),
   rooms: (slug: string) => request<{ rooms: { name: string; players: number; max: number }[] }>(`/api/rooms/${slug}`),
 
+  /** Searches are memoised for a few minutes: reopening the browser or paging back is instant. */
+  searchResources: async (p: ResourceQueryParams, signal?: AbortSignal) => {
+    const qs = new URLSearchParams({ q: p.q, kind: p.kind, license: p.license, page: String(p.page) });
+    if (p.provider) qs.set('provider', p.provider);
+    const key = qs.toString();
+    const hit = searchMemo.get(key);
+    if (hit) return hit;
+    const result = await request<ResourceSearch>(`/api/resources/search?${key}`, { signal });
+    // A search where some source failed is not worth remembering: the next try may succeed.
+    if (result.providers.every((x) => x.ok)) searchMemo.set(key, result);
+    return result;
+  },
+  /** Library items are instant; new ones are downloaded once for everybody. Either way the search memo is stale afterwards. */
+  importResource: async (body: { url?: string; libraryId?: string; name: string; kind: ResourceKind; meta?: ResourceMeta }) => {
+    const res = await post<ImportedFile>('/api/resources/import', body);
+    searchMemo.clear();
+    return res;
+  },
+
   upload: (file: File) =>
     request<{ url: string; size: number; mime: string }>(`/api/assets?name=${encodeURIComponent(file.name)}`, {
       method: 'POST',
@@ -177,6 +197,63 @@ export const api = {
   aiModels: () => request<{ models: AiModel[] }>('/api/ai/models'),
   aiChat: (body: unknown, userKey?: string) => post<AiResponse>('/api/ai/chat', body, userKey ? { 'x-openrouter-key': userKey } : undefined),
 };
+
+export type ResourceKind = 'model' | 'texture' | 'image' | 'audio' | 'video' | 'font' | 'tool' | 'other';
+export interface ResourceItem {
+  id: string;
+  provider: string;
+  title: string;
+  kind: ResourceKind;
+  thumb: string | null;
+  preview?: string;
+  license: string;
+  licenseGroup: 'cc0' | 'attribution' | 'other';
+  licenseUrl?: string;
+  author?: string;
+  description?: string;
+  sourceUrl: string;
+  downloadUrl?: string;
+  size?: number;
+  tags?: string[];
+  inLibrary?: boolean;
+  libraryId?: string;
+  uses?: number;
+}
+export interface ResourceSearch {
+  items: ResourceItem[];
+  hasMore: boolean;
+  providers: { id: string; label: string; ok: boolean; error?: string }[];
+}
+export interface ResourceQueryParams {
+  q: string;
+  kind: ResourceKind | 'all';
+  license: 'free' | 'cc0';
+  provider?: string;
+  page: number;
+}
+
+export interface ResourceMeta {
+  provider: string;
+  id: string;
+  title: string;
+  author?: string;
+  license: string;
+  licenseUrl?: string;
+  sourceUrl: string;
+}
+export interface ImportedFile {
+  url: string;
+  size: number;
+  mime: string;
+  name: string;
+  type: 'image' | 'audio' | 'model' | 'video' | 'font' | 'other';
+  libraryId?: string;
+  /** True when this call downloaded the file (first user to need it). */
+  created: boolean;
+  credit?: { title: string; author?: string; license: string; sourceUrl: string };
+}
+
+const searchMemo = new TtlMemo<ResourceSearch>(5 * 60_000, 60);
 
 export interface DeployConfig {
   realtime: 'ws' | 'p2p';

@@ -49,6 +49,7 @@ export const editorHost: {
   openWelcome: () => void;
   openHistory: () => void;
   openLibrary: () => void;
+  openResources: () => void;
   uploadFiles: () => void;
 } = {
   save: async () => false,
@@ -57,5 +58,6 @@ export const editorHost: {
   openWelcome: () => {},
   openHistory: () => {},
   openLibrary: () => {},
+  openResources: () => {},
   uploadFiles: () => {},
 };

@@ -153,7 +153,7 @@ const TIPS: [string, string, string][] = [
 
 export function WelcomeDialog({ onClose }: { onClose(): void }) {
   return (
-    <Modal title="Welcome to Bazi-Sazi Studio" icon="Sparkles" onClose={onClose} wide footer={
+    <Modal title="Welcome to Bazi-Sazi Studio" icon="Sparkles" onClose={onClose} wide soft footer={
       <>
         <a className="btn" href="/learn" target="_blank" rel="noopener"><Icon name="BookOpen" size={14} /> Step-by-step guides</a>
         <span className="spacer" />

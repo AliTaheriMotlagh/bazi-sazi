@@ -13,6 +13,9 @@ export class AssetCache {
   private textureLoader = new THREE.TextureLoader();
   private gltfLoader = new GLTFLoader();
   private byId = new Map<string, AssetData>();
+  private pending = 0;
+  private done = 0;
+  private listeners = new Set<() => void>();
 
   constructor(
     assets: AssetData[],
@@ -20,6 +23,34 @@ export class AssetCache {
   ) {
     this.textureLoader.setCrossOrigin('anonymous');
     this.setAssets(assets);
+  }
+
+  /** Loads in flight (models, textures, audio). `total` resets to 0 once everything has arrived. */
+  get loading(): { loaded: number; total: number } {
+    return { loaded: this.done, total: this.pending };
+  }
+
+  /** Be told whenever a load starts or finishes (used for the editor's "Loading…" indicator). */
+  onLoadingChange(fn: () => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  private begin(): void {
+    this.pending++;
+    this.listeners.forEach((l) => l());
+  }
+
+  private end(): void {
+    this.done++;
+    if (this.done >= this.pending) this.done = this.pending = 0;
+    this.listeners.forEach((l) => l());
+  }
+
+  private track<T>(promise: Promise<T>): Promise<T> {
+    this.begin();
+    promise.then(() => this.end(), () => this.end());
+    return promise;
   }
 
   setAssets(assets: AssetData[]): void {
@@ -40,7 +71,8 @@ export class AssetCache {
     if (cached) return cached;
     const url = this.url(id);
     if (!url) return null;
-    const tex = this.textureLoader.load(url);
+    this.begin();
+    const tex = this.textureLoader.load(url, () => this.end(), undefined, () => this.end());
     tex.colorSpace = THREE.SRGBColorSpace;
     if (this.pixelArt) {
       tex.magFilter = THREE.NearestFilter;
@@ -57,7 +89,7 @@ export class AssetCache {
     if (cached) return cached;
     const url = this.url(id);
     if (!url) return null;
-    const promise = this.gltfLoader.loadAsync(url);
+    const promise = this.track(this.gltfLoader.loadAsync(url));
     this.models.set(id, promise);
     return promise;
   }
@@ -67,9 +99,11 @@ export class AssetCache {
     if (!asset) return null;
     const cached = this.audio.get(asset.id);
     if (cached) return cached;
-    const promise = fetch(asset.url)
-      .then((r) => r.arrayBuffer())
-      .then((buf) => ctx.decodeAudioData(buf));
+    const promise = this.track(
+      fetch(asset.url)
+        .then((r) => r.arrayBuffer())
+        .then((buf) => ctx.decodeAudioData(buf)),
+    );
     this.audio.set(asset.id, promise);
     return promise;
   }

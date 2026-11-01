@@ -54,6 +54,12 @@ function toDataUri(blob: Blob, mime: string): Promise<string> {
   });
 }
 
+/** Attribution list for assets that came from free libraries (empty string when there are none). */
+export function creditsText(project: ProjectData): string {
+  const lines = project.assets.filter((a) => a.credit).map((a) => `- ${a.credit!.title}${a.credit!.author ? ` by ${a.credit!.author}` : ''} — ${a.credit!.license} — ${a.credit!.sourceUrl}`);
+  return lines.length ? `Credits for ${project.name}\n\n${lines.join('\n')}\n` : '';
+}
+
 const safeName = (s: string) => s.replace(/[^\w.-]+/g, '_').slice(0, 60) || 'game';
 
 interface Bundle {
@@ -107,7 +113,8 @@ export async function exportHtml(source: ProjectData, progress: ExportProgress):
     else skipped.push(a.name);
   }
   progress('Writing file', 1, 1);
-  const html = page(project, `<script id="bazi-project" type="application/json">${jsonForScript(project)}</script>\n<script>${inlineScript(player)}</script>\n`);
+  const credits = creditsText(project);
+  const html = page(project, `${credits ? `<!--\n${credits.replace(/--/g, '- -')}-->\n` : ''}<script id="bazi-project" type="application/json">${jsonForScript(project)}</script>\n<script>${inlineScript(player)}</script>\n`);
   return { blob: new Blob([html], { type: 'text/html' }), name: `${safeName(project.name)}.html`, skipped };
 }
 
@@ -142,6 +149,8 @@ export async function exportZip(source: ProjectData, progress: ExportProgress, t
       data: enc.encode(`${project.name}\n\nUpload this folder to any static host (itch.io HTML5, GitHub Pages, Netlify...) or run:\n  npx serve .\nand open index.html. Browsers block loading 3D models from file:// URLs,\nso use a local server for local testing (or export the single-file HTML instead).\n`),
     },
   );
+  const credits = creditsText(project);
+  if (credits) entries.push({ path: 'CREDITS.txt', data: enc.encode(credits) });
   progress('Zipping', 1, 1);
   if (target) {
     const wrapped = entries.map((e) => ({ ...e, path: `${WEB_ROOT}/${e.path}` }));

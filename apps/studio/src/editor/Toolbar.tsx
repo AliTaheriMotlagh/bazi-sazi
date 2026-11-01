@@ -26,11 +26,14 @@ export function Toolbar({ onToggleLeft, onToggleRight, published }: { onToggleLe
   const deviceIcon = device === 'free' ? 'Maximize' : device === 'desktop' ? 'Monitor' : device === 'tablet' ? 'Tablet' : 'Smartphone';
   return (
     <header className="toolbar" role="toolbar" aria-label="Editor toolbar">
-      <button className="btn ghost icon show-tablet" onClick={onToggleLeft} aria-label="Toggle outliner and place panel">
+      <button className="btn ghost icon show-tablet hide-phone" onClick={onToggleLeft} aria-label="Toggle outliner and place panel">
         <Icon name="Layers" />
       </button>
-      <div className="group hide-phone">
-        <Tool id="file.save" />
+      <button className="btn ghost icon show-phone" onClick={actionById('window.palette')!.run} aria-label="All commands">
+        <Icon name="Menu" />
+      </button>
+      <div className="group">
+        <span className="hide-phone"><Tool id="file.save" /></span>
         <Tool id="edit.undo" />
         <Tool id="edit.redo" />
       </div>
@@ -38,7 +41,7 @@ export function Toolbar({ onToggleLeft, onToggleRight, published }: { onToggleLe
         <Tool id="tool.move" />
         <Tool id="tool.rotate" />
         <Tool id="tool.scale" />
-        <Tool id="tool.snap" />
+        <span className="hide-phone"><Tool id="tool.snap" /></span>
       </div>
       <button
         className="btn sm hide-phone"
@@ -60,11 +63,11 @@ export function Toolbar({ onToggleLeft, onToggleRight, published }: { onToggleLe
         <button className={`btn sm icon ${playState === 'paused' ? 'active' : ''}`} disabled={!playing} onClick={actionById('build.pause')!.run} title="Pause" aria-label="Pause">
           <Icon name="Pause" size={15} />
         </button>
-        <button className="btn sm icon" disabled={playState !== 'paused'} onClick={() => session().playRuntime?.step()} title="Step one frame" aria-label="Step one frame">
+        <button className="btn sm icon hide-phone" disabled={playState !== 'paused'} onClick={() => session().playRuntime?.step()} title="Step one frame" aria-label="Step one frame">
           <Icon name="StepForward" size={15} />
         </button>
         <button
-          className="btn sm icon"
+          className="btn sm icon hide-phone"
           title="Preview device"
           aria-label="Preview device"
           onClick={(e) => menu.open(e.currentTarget.getBoundingClientRect(), ACTIONS.filter((a) => a.id.startsWith('device.') || a.id === 'build.colliders').map(toMenuItem))}

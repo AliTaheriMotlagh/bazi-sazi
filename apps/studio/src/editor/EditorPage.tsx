@@ -8,6 +8,7 @@ import { editor, useEditor, type BottomTab, type RightTab } from '../store/edito
 import { isNetworkError, loadProject, markSynced, saveLocal } from '../store/offline';
 import { toast } from '../store/ui';
 import { Icon } from '../ui/Icon';
+import { useKeyboardAwareHeight, useMedia } from '../ui/hooks';
 import { Spinner } from '../ui/primitives';
 import { actionForKey } from './actions';
 import { AiPanel } from './ai/AiPanel';
@@ -25,23 +26,13 @@ import { HistoryDialog } from './HistoryDialog';
 import { LibraryDialog } from './LibraryDialog';
 import { PublishDialog } from './PublishDialog';
 import { editorHost, useSession, viewportBridge } from './session';
+import { ResourceDialog } from './ResourceDialog';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
 
 const AUTOSAVE_MS = 1500;
 const THUMBNAIL_EVERY_MS = 60_000;
-const LAYOUT_VARS = ['--left-w', '--right-w', '--bottom-h', '--outliner-h'];
-
-function useMedia(query: string): boolean {
-  const [match, setMatch] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const m = window.matchMedia(query);
-    const on = () => setMatch(m.matches);
-    m.addEventListener('change', on);
-    return () => m.removeEventListener('change', on);
-  }, [query]);
-  return match;
-}
+const LAYOUT_VARS = ['--left-w', '--right-w', '--bottom-h', '--outliner-h', '--phone-preview-h'];
 
 /** Drag handle that resizes a neighbouring panel through a CSS variable (remembered per browser). */
 function Splitter({ cssVar, axis, invert, min, max, rootRef }: { cssVar: string; axis: 'x' | 'y'; invert?: boolean; min: number; max: number; rootRef: React.RefObject<HTMLDivElement | null> }) {
@@ -146,13 +137,15 @@ export default function EditorPage() {
   const playState = useEditor((s) => s.playState);
   const layout = useEditor((s) => s.layout);
   const [published, setPublished] = useState<{ slug: string; title: string; description: string } | null>(null);
-  const [dialog, setDialog] = useState<null | 'publish' | 'shortcuts' | 'welcome' | 'history' | 'library'>(null);
+  const [dialog, setDialog] = useState<null | 'publish' | 'shortcuts' | 'welcome' | 'history' | 'library' | 'resources'>(null);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [phoneView, setPhoneView] = useState<PhoneView>('scene');
   const isTablet = useMedia('(max-width: 1100px)');
   const isPhone = useMedia('(max-width: 720px)');
   const root = useRef<HTMLDivElement>(null);
+  const keyboardOpen = useKeyboardAwareHeight(isPhone);
+  const activeDoc = useEditor((s) => s.activeDoc);
   const lastThumb = useRef(0);
   const saving = useRef<Promise<boolean> | null>(null);
 
@@ -252,6 +245,7 @@ export default function EditorPage() {
     editorHost.openWelcome = () => setDialog('welcome');
     editorHost.openHistory = () => setDialog('history');
     editorHost.openLibrary = () => setDialog('library');
+    editorHost.openResources = () => setDialog('resources');
   }, [save]);
 
   // ── autosave
@@ -302,6 +296,11 @@ export default function EditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
 
+  // Phone: opening a script/graph/animation gives it the whole stage; the sheets only share space with the scene.
+  useEffect(() => {
+    if (isPhone && activeDoc !== 'scene' && activeDoc !== 'game') setPhoneView('scene');
+  }, [activeDoc, isPhone]);
+
   if (!project || loadedId !== id)
     return (
       <div className="loading-screen">
@@ -319,6 +318,66 @@ export default function EditorPage() {
     if (v === 'details') editor().set({ rightTab: 'inspector' });
     if (v === 'content') editor().set({ bottomTab: 'content' });
   };
+  if (isPhone) {
+    const docLabel = activeDoc.startsWith('script:') ? ['Code', 'FileCode'] : activeDoc.startsWith('graph:') ? ['Logic', 'Workflow'] : activeDoc.startsWith('anim:') ? ['Anim', 'Clapperboard'] : activeDoc === 'game' ? ['Game', 'Gamepad2'] : ['Scene', 'Box'];
+    const sheet =
+      phoneView === 'objects' ? (
+        <div className="phone-objects">
+          <Hierarchy />
+          <PlacePanel />
+        </div>
+      ) : phoneView === 'content' ? (
+        <BottomDrawer />
+      ) : phoneView === 'details' || phoneView === 'ai' ? (
+        <DetailsPanel />
+      ) : null;
+    return (
+      <div className={`editor phone ${keyboardOpen ? 'keyboard' : ''}`} ref={root}>
+        <Toolbar published={!!published} onToggleLeft={() => undefined} onToggleRight={() => undefined} />
+        <div className={`phone-stage ${sheet ? 'split' : 'full'}`}>
+          <div className="phone-preview">
+            <DocumentArea />
+          </div>
+          {!sheet && (activeDoc === 'scene' || activeDoc === 'game') && (
+            <button className="phone-fab" onClick={() => setPhone('objects')} aria-label="Add objects">
+              <Icon name="Plus" size={24} />
+            </button>
+          )}
+          {sheet && (
+            <>
+              <Splitter cssVar="--phone-preview-h" axis="y" min={96} max={Math.round(window.innerHeight * 0.7)} rootRef={root} />
+              <div className="phone-sheet">{sheet}</div>
+            </>
+          )}
+        </div>
+        <nav className="mobile-tabs" aria-label="Editor sections">
+          {(
+            [
+              ['scene', docLabel[0], docLabel[1]],
+              ['objects', 'Objects', 'ListTree'],
+              ['details', 'Details', 'SlidersHorizontal'],
+              ['content', 'Content', 'FolderTree'],
+              ['ai', 'AI', 'Sparkles'],
+            ] as [PhoneView, string, string][]
+          ).map(([v, label, icon]) => (
+            <button key={v} className={phoneView === v ? 'active' : ''} aria-current={phoneView === v ? 'page' : undefined} onClick={() => setPhone(v)}>
+              <Icon name={icon} size={19} />
+              {label}
+            </button>
+          ))}
+        </nav>
+        <CommandPalette />
+        <Tutorial published={!!published} />
+        {dialog === 'history' && <HistoryDialog onClose={() => setDialog(null)} save={save} />}
+        {dialog === 'library' && <LibraryDialog onClose={() => setDialog(null)} />}
+        {dialog === 'resources' && <ResourceDialog onClose={() => setDialog(null)} />}
+        {dialog === 'publish' && <PublishDialog published={published} onPublished={setPublished} onClose={() => setDialog(null)} save={() => save(true)} />}
+        {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
+        {dialog === 'welcome' && <WelcomeDialog onClose={() => setDialog(null)} />}
+      </div>
+    );
+  }
+
   const cols = isTablet ? '1fr' : [layout.place ? 'var(--left-w, 250px) 4px' : '', '1fr', showRight ? '4px var(--right-w, 340px)' : ''].filter(Boolean).join(' ');
 
   const left = (
@@ -389,6 +448,7 @@ export default function EditorPage() {
       <Tutorial published={!!published} />
       {dialog === 'history' && <HistoryDialog onClose={() => setDialog(null)} save={save} />}
       {dialog === 'library' && <LibraryDialog onClose={() => setDialog(null)} />}
+      {dialog === 'resources' && <ResourceDialog onClose={() => setDialog(null)} />}
       {dialog === 'publish' && <PublishDialog published={published} onPublished={setPublished} onClose={() => setDialog(null)} save={() => save(true)} />}
       {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
       {dialog === 'welcome' && <WelcomeDialog onClose={() => setDialog(null)} />}

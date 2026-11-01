@@ -112,6 +112,7 @@ export const ACTIONS: EditorAction[] = [
       );
     },
   },
+  { id: 'file.resources', label: 'Free resources (models, sounds, textures)…', group: 'File', icon: 'Library', keys: ['Mod+Shift+R'], run: () => editorHost.openResources() },
   { id: 'file.history', label: 'Version history…', group: 'File', icon: 'Clock', run: () => editorHost.openHistory() },
   { id: 'file.library', label: 'Prefab library…', group: 'File', icon: 'Package', run: () => editorHost.openLibrary() },
   { id: 'file.settings', label: 'Project settings', group: 'File', icon: 'Settings', run: () => editor().set({ rightTab: 'settings' }) },
@@ -175,6 +176,14 @@ export const ACTIONS: EditorAction[] = [
   { id: 'window.problems', label: 'Message log (problems)', group: 'Window', icon: 'TriangleAlert', run: () => (editor().toggleLayout('drawer', true), editor().set({ bottomTab: 'problems' })) },
   { id: 'window.profiler', label: 'Profiler', group: 'Window', icon: 'Gauge', run: () => (editor().toggleLayout('drawer', true), editor().set({ bottomTab: 'profiler' })) },
   { id: 'window.ai', label: 'AI assistant', group: 'Window', icon: 'Bot', keys: ['Mod+Shift+A'], run: () => (editor().toggleLayout('details', true), editor().set({ rightTab: 'ai' })) },
+  {
+    id: 'window.clearCache',
+    label: 'Clear cached previews and pictures',
+    group: 'Window',
+    icon: 'Eraser',
+    run: () =>
+      void import('../store/kv').then(({ clearCaches }) => clearCaches()).then(() => toast('Cached previews cleared. They are rebuilt when needed.', 'success')),
+  },
   { id: 'window.palette', label: 'Command palette', group: 'Window', icon: 'Command', keys: ['Mod+K'], inPlay: true, inInputs: true, run: () => editor().set({ paletteOpen: !editor().paletteOpen }) },
   { id: 'window.theme', label: 'Toggle light / dark theme', group: 'Window', icon: 'SunMoon', run: () => useUi.getState().setTheme(useUi.getState().theme === 'dark' ? 'light' : 'dark') },
   {

@@ -350,6 +350,9 @@ export function ContentBrowser() {
           <button className="btn sm" onClick={() => input.current?.click()} title="Import images, sounds, videos or GLB models">
             <Icon name="Upload" size={13} /> Import
           </button>
+          <button className="btn sm" onClick={() => editorHost.openResources()} title="Find free models, textures, sounds and more from other websites">
+            <Icon name="Library" size={13} /> Free resources
+          </button>
           <div className="cb-search">
             <Icon name="Search" size={13} />
             <input placeholder="Search content…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search content" />

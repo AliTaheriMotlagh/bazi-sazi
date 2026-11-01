@@ -16,6 +16,7 @@ import { assetRoutes, FILES_HEADERS } from './routes/assets.ts';
 import { authRoutes } from './routes/auth.ts';
 import { gameRoutes } from './routes/games.ts';
 import { projectRoutes } from './routes/projects.ts';
+import { resourceRoutes, type ResourceDeps } from './resources/routes.ts';
 
 /** Paths that are never rewritten to the game player on a game subdomain (keep in sync with PAGE in scripts/build-vercel.mjs). */
 const PASSTHROUGH = /^\/(?:(?:api|files|assets|ws|samples|templates|icons)\/|(?:favicon\.svg|manifest\.webmanifest|sw\.js)(?:[?#]|$))/;
@@ -29,7 +30,7 @@ export function subdomainSlug(host: string | undefined, baseDomain: string): str
   return /^[a-z0-9-]{3,40}$/.test(sub) ? sub : null;
 }
 
-export async function buildApp(overrides: Partial<AppContext> = {}): Promise<FastifyInstance> {
+export async function buildApp(overrides: Partial<AppContext> = {}, resourceDeps: ResourceDeps = {}): Promise<FastifyInstance> {
   const config = overrides.config ?? defaultConfig;
   const db = overrides.db ?? (await openDb(config));
   const files = overrides.files ?? (config.blobToken ? blobStore(config.blobToken) : config.serverless ? unavailableStore() : diskStore(path.join(config.dataDir, 'files')));
@@ -85,6 +86,7 @@ export async function buildApp(overrides: Partial<AppContext> = {}): Promise<Fas
   projectRoutes(app, ctx);
   gameRoutes(app, ctx);
   assetRoutes(app, ctx);
+  resourceRoutes(app, ctx, resourceDeps);
   aiRoutes(app, ctx);
   if (!config.serverless) {
     multiplayer(app, ctx);

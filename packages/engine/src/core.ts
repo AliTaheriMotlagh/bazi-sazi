@@ -21,3 +21,4 @@ export * from './systems/navmesh';
 export * from './systems/shaderGraph';
 export * from './systems/collab';
 export * from './systems/authoritative';
+export * from './systems/perf';

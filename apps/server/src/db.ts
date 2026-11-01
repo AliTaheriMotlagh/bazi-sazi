@@ -80,6 +80,27 @@ const MIGRATIONS = [
      PRIMARY KEY (project_id, user_id)
    );
    CREATE INDEX IF NOT EXISTS collaborators_user ON project_collaborators(user_id);`,
+  // Shared library: every resource a user downloads is stored once and reusable by everyone.
+  `CREATE TABLE IF NOT EXISTS library_assets (
+     id TEXT PRIMARY KEY,
+     source_key TEXT NOT NULL UNIQUE,
+     url TEXT NOT NULL,
+     name TEXT NOT NULL,
+     kind TEXT NOT NULL,
+     asset_type TEXT NOT NULL,
+     mime TEXT NOT NULL,
+     size INTEGER NOT NULL,
+     provider TEXT NOT NULL,
+     source_url TEXT NOT NULL,
+     license TEXT NOT NULL,
+     license_url TEXT,
+     author TEXT,
+     added_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+     uses INTEGER NOT NULL DEFAULT 1,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS library_recent ON library_assets(created_at DESC);
+   CREATE INDEX IF NOT EXISTS library_popular ON library_assets(uses DESC);`,
 ];
 
 type Value = string | number | null;

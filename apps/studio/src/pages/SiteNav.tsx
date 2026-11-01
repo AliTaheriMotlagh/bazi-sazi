@@ -73,6 +73,7 @@ export function SiteNav() {
       <div className="nav-links">
         <NavLink to="/" end>Create</NavLink>
         <NavLink to="/explore">Play games</NavLink>
+        <NavLink to="/resources">Resources</NavLink>
         <NavLink to="/learn">Learn</NavLink>
       </div>
       <div className="spacer" />
