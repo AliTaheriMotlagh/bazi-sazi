@@ -17,6 +17,7 @@ export type FieldType =
   | 'asset'
   | 'script'
   | 'graph'
+  | 'animator'
   | 'prefab'
   | 'scene'
   | 'entity'
@@ -132,6 +133,25 @@ export const COMPONENTS: ComponentSchema[] = [
       f('animationSpeed', 'Animation speed', 'number', 1, { step: 0.1 }),
       f('rotationOffset', 'Turn model (°)', 'number', 0, { step: 90, help: 'Use 180 if the model walks backwards' }),
       f('castShadow', 'Cast shadows', 'boolean', true),
+    ],
+  },
+  {
+    type: 'Terrain',
+    label: 'Terrain',
+    category: 'Level',
+    icon: 'Mountain',
+    description: 'Sculptable ground. Select it and use the Sculpt tools in the Details panel, then brush on the terrain in the viewport.',
+    modes: ['3d'],
+    fields: [
+      f('size', 'Size', 'number', 40, { min: 4, step: 1, help: 'Width and depth in world units' }),
+      f('resolution', 'Detail', 'number', 48, { min: 8, max: 128, step: 8, help: 'Grid cells per side. Changing it resets the sculpt.' }),
+      f('height', 'Max height', 'number', 8, { min: 0.5, step: 0.5 }),
+      f('lowColor', 'Low color', 'color', '#4f7d3a'),
+      f('highColor', 'High color', 'color', '#b9b2a4'),
+      f('texture', 'Texture', 'asset', '', { assetType: 'image' }),
+      f('textureRepeat', 'Texture repeat', 'number', 8, { min: 0.1, step: 1, showIf: (p) => !!p.texture }),
+      f('collide', 'Solid', 'boolean', true, { help: 'Physics: things can stand on it' }),
+      f('heights', 'Heights', 'text', '', { showIf: () => false }),
     ],
   },
   {
@@ -373,6 +393,17 @@ export const COMPONENTS: ComponentSchema[] = [
       f('axis', 'Axis', 'vec3', [0, 1, 0]),
       f('amplitude', 'Distance', 'number', 1, { step: 0.1 }),
       f('frequency', 'Cycles / second', 'number', 0.5, { min: 0, step: 0.05 }),
+    ],
+  },
+  {
+    type: 'Animator',
+    label: 'Animator',
+    category: 'Gameplay',
+    icon: 'Clapperboard',
+    description: 'Plays keyframe clips and glTF skeletal animations through a state machine with cross-fades. Drive it with parameters from scripts: self.vars.speed = 3.',
+    fields: [
+      f('controller', 'Controller', 'animator', '', { help: 'Open it from the Content Browser → Animations to edit clips and states' }),
+      f('speed', 'Playback speed', 'number', 1, { min: 0, step: 0.1 }),
     ],
   },
   {

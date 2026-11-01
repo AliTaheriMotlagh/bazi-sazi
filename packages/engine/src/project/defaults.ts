@@ -164,6 +164,7 @@ export function createProject(name: string, mode: GameMode = '3d'): ProjectData 
     scripts: [],
     graphs: [],
     prefabs: [],
+    animators: [],
   };
 }
 

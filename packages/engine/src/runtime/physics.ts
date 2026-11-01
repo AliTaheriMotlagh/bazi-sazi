@@ -2,6 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
 import { prop } from '../components/registry';
 import type { ComponentData, Vec3 } from '../types';
+import { buildTerrainGeometry } from './builders';
 import type { GameObject } from './GameObject';
 
 interface BodyEntry {
@@ -68,7 +69,9 @@ export class Physics {
   }
 
   add(go: GameObject): void {
-    const colliderData = go.getComponent('Collider');
+    const terrain = go.getComponent('Terrain');
+    // A solid Terrain is its own static collider.
+    const colliderData = go.getComponent('Collider') ?? (terrain && prop<boolean>(terrain, 'collide') ? ({ type: 'Collider', shape: 'auto' } as ComponentData) : undefined);
     if (!colliderData) return;
     const rb = go.getComponent('RigidBody');
     const type = (rb ? prop<string>(rb, 'bodyType') : 'fixed') as BodyEntry['type'];
@@ -127,6 +130,20 @@ export class Physics {
     let hy = 0.5 * size[1] * scale.y;
     let hz = 0.5 * size[2] * scale.z;
 
+    const terrain = shape === 'auto' ? go.getComponent('Terrain') : undefined;
+    if (terrain) {
+      const g = buildTerrainGeometry(terrain);
+      const verts = Float32Array.from(g.getAttribute('position').array as ArrayLike<number>);
+      for (let i = 0; i < verts.length; i += 3) {
+        verts[i] *= scale.x;
+        verts[i + 1] *= scale.y;
+        verts[i + 2] *= scale.z;
+      }
+      const indices = Uint32Array.from(g.getIndex()!.array as ArrayLike<number>);
+      g.dispose();
+      const desc = RAPIER.ColliderDesc.trimesh(verts, indices);
+      return { desc, halfHeight: 0.5 };
+    }
     if (shape === 'auto') {
       const mesh = go.getComponent('Mesh');
       const sprite = go.getComponent('Sprite');

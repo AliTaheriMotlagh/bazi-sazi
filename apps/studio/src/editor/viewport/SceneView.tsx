@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { ViewHelper } from 'three/examples/jsm/helpers/ViewHelper.js';
-import { addAsset, addEntity, addSampleAsset, createFromPreset, instantiatePrefab, PRESETS, updateEntity } from '../../store/commands';
+import { applyTerrainBrush, encodeHeights, lineCells, rectCells, worldToCell } from '@bazi/engine';
+import { addAsset, addEntity, addSampleAsset, createFromPreset, instantiatePrefab, PRESETS, updateEntity, beginStroke, fillTileMap, paintTileMap, setTerrainHeights, terrainLevels, findEntity } from '../../store/commands';
 import { editor, useEditor, type ViewportOptions } from '../../store/editor';
 import { logToConsole } from '../../store/console';
 import { toast } from '../../store/ui';
@@ -262,6 +263,113 @@ export function SceneView() {
       el.removeEventListener('pointerup', onUp);
     };
   }, []);
+
+  // Level tools: paint tiles / sculpt terrain by dragging in the scene view.
+  // Registered in the capture phase so the orbit camera, gizmo and click-select stay out of the way.
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el || !ready) return;
+    let active: { kind: 'paint' | 'sculpt'; id: string; last: [number, number] | null; start: [number, number] | null } | null = null;
+    const ndcOf = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    };
+    const selected = (type: string) => {
+      const { selection } = editor();
+      const ent = selection.length === 1 ? findEntity(selection[0]) : undefined;
+      return ent?.components.some((c) => c.type === type && c.enabled !== false) ? ent : undefined;
+    };
+    const cellAt = (e: PointerEvent, ent: NonNullable<ReturnType<typeof findEntity>>): [number, number] | null => {
+      const t = tools.current;
+      if (!t) return null;
+      const ray = new THREE.Raycaster();
+      ray.setFromCamera(ndcOf(e), t.camera);
+      const is2d = editor().project?.settings.mode === '2d';
+      const p = ent.transform.position;
+      const plane = is2d ? new THREE.Plane(new THREE.Vector3(0, 0, 1), -p[2]) : new THREE.Plane(new THREE.Vector3(0, 1, 0), -p[1]);
+      const hit = ray.ray.intersectPlane(plane, new THREE.Vector3());
+      if (!hit) return null;
+      const size = Number(ent.components.find((c) => c.type === 'TileMap')?.tileSize ?? 1);
+      return worldToCell([hit.x, hit.y, hit.z], p, size, is2d);
+    };
+    const paintAt = (e: PointerEvent, first: boolean) => {
+      const { paint } = editor();
+      const ent = active && findEntity(active.id);
+      if (!paint || !ent || !active) return;
+      const cell = cellAt(e, ent);
+      if (!cell) return;
+      const ch = paint.tool === 'erase' ? '.' : paint.char;
+      if (paint.tool === 'fill') {
+        if (first) fillTileMap(ent.id, cell[0], cell[1], ch);
+      } else if (paint.tool === 'rect') {
+        if (first) active.start = cell;
+      } else {
+        paintTileMap(ent.id, active.last ? lineCells(active.last, cell) : [cell], ch);
+        // Growing left/up moves the entity, so remember the cell in the new coordinates.
+        const moved = findEntity(ent.id);
+        active.last = moved ? cellAt(e, moved) : cell;
+      }
+    };
+    const sculptAt = (e: PointerEvent) => {
+      const t = tools.current;
+      const { sculpt } = editor();
+      const ent = active && findEntity(active.id);
+      if (!t || !sculpt || !ent || !active) return;
+      const obj = t.runtime.getObject(ent.id)?.object3d;
+      if (!obj) return;
+      const ray = new THREE.Raycaster();
+      ray.setFromCamera(ndcOf(e), t.camera);
+      const hit = ray.intersectObject(obj, true)[0];
+      if (!hit) return;
+      const info = terrainLevels(ent.id);
+      if (!info) return;
+      const size = Number(ent.components.find((c) => c.type === 'Terrain')?.size ?? 40);
+      const local = obj.worldToLocal(hit.point.clone());
+      const brush = e.shiftKey && sculpt.brush === 'raise' ? 'lower' : e.shiftKey && sculpt.brush === 'lower' ? 'raise' : sculpt.brush;
+      applyTerrainBrush(info.levels, info.resolution, brush, local.x / size + 0.5, local.z / size + 0.5, sculpt.radius, sculpt.strength);
+      setTerrainHeights(ent.id, encodeHeights(info.levels));
+    };
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0 || editor().playState !== 'edit') return;
+      const { paint, sculpt } = editor();
+      const tile = paint?.viewport ? selected('TileMap') : undefined;
+      const terrain = sculpt ? selected('Terrain') : undefined;
+      const ent = tile ?? terrain;
+      if (!ent) return;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      beginStroke();
+      active = { kind: tile ? 'paint' : 'sculpt', id: ent.id, last: null, start: null };
+      if (tile) paintAt(e, true);
+      else sculptAt(e);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!active) return;
+      if (active.kind === 'paint') paintAt(e, false);
+      else sculptAt(e);
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!active) return;
+      const { paint } = editor();
+      const ent = findEntity(active.id);
+      if (active.kind === 'paint' && paint?.tool === 'rect' && active.start && ent) {
+        const end = cellAt(e, ent);
+        if (end) paintTileMap(ent.id, rectCells(active.start, end), paint.char, 'Paint rectangle');
+      }
+      active = null;
+    };
+    el.addEventListener('pointerdown', onDown, { capture: true });
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+    return () => {
+      el.removeEventListener('pointerdown', onDown, { capture: true });
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+    };
+  }, [ready]);
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault();

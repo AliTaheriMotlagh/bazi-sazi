@@ -1,6 +1,6 @@
 import type { FieldSchema, ProjectData, Vec3 } from '@bazi/engine';
 import { useRef, useState } from 'react';
-import { newGraph, newScript } from '../../store/commands';
+import { newAnimator, newGraph, newScript } from '../../store/commands';
 import { editor, useEditor } from '../../store/editor';
 import { Icon } from '../../ui/Icon';
 import { NumberInput, Switch } from '../../ui/primitives';
@@ -121,6 +121,8 @@ const refOptions = (project: ProjectData, field: FieldSchema, sceneId: string): 
       return project.assets.filter((a) => !field.assetType || a.type === field.assetType).map((a) => ({ value: a.id, label: a.name }));
     case 'script':
       return project.scripts.map((s) => ({ value: s.id, label: s.name }));
+    case 'animator':
+      return (project.animators ?? []).map((a) => ({ value: a.id, label: a.name }));
     case 'graph':
       return project.graphs.map((g) => ({ value: g.id, label: g.name }));
     case 'prefab':
@@ -216,6 +218,27 @@ export function FieldEditor({ field, value, onChange, entityId }: { field: Field
       );
       break;
     }
+    case 'animator':
+      control = (
+        <div className="row" style={{ gap: 4 }}>
+          <div className="grow">
+            <RefSelect value={String(v)} options={refOptions(project, field, sceneId)} onChange={onChange} />
+          </div>
+          {v ? (
+            <button className="btn sm icon" title="Open animation editor" onClick={() => editor().openAnimator(String(v))} aria-label="Edit animator">
+              <Icon name="Pencil" size={13} />
+            </button>
+          ) : (
+            <button className="btn sm" title="Create new" onClick={() => {
+              const name = editor().project?.scenes.find((s) => s.id === sceneId)?.entities.find((e) => e.id === entityId)?.name ?? 'New';
+              onChange(newAnimator(`${name} Animator`));
+            }}>
+              <Icon name="Plus" size={13} /> New
+            </button>
+          )}
+        </div>
+      );
+      break;
     case 'asset':
     case 'prefab':
     case 'scene':

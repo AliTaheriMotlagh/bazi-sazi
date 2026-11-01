@@ -6,6 +6,9 @@ import { ExplorePage } from './pages/Explore';
 import { LearnPage } from './pages/Learn';
 import { PlayPage } from './pages/Play';
 import { useAuth } from './store/auth';
+import { editor } from './store/editor';
+import { startOfflineSync } from './store/offline';
+import { editorHost } from './editor/session';
 import { useUi } from './store/ui';
 import { Spinner, Toasts } from './ui/primitives';
 import { registerServiceWorker } from './pwa';
@@ -33,6 +36,14 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
+  // Flush changes made offline as soon as the server is reachable again.
+  useEffect(
+    () =>
+      startOfflineSync((ids) => {
+        if (editor().saveState === 'offline' && ids.includes(editor().projectId ?? '')) void editorHost.save();
+      }),
+    [],
+  );
   return (
     <>
       <Suspense fallback={<Loading />}>

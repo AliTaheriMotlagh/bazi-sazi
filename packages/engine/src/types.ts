@@ -108,6 +108,79 @@ export interface PrefabData {
   entities: EntityData[];
 }
 
+/** One keyframe: a time in seconds and a number (or a #hex color for color tracks). */
+export interface AnimKey {
+  t: number;
+  v: number | string;
+  /** Interpolation into the NEXT key. Default smooth. */
+  ease?: 'linear' | 'smooth' | 'step';
+}
+
+/**
+ * What a track animates: position.x|y|z, rotation.x|y|z, scale.x|y|z,
+ * opacity, color, or vars.<name> (a number scripts can read from self.vars).
+ */
+export interface AnimTrack {
+  id: string;
+  target: string;
+  keys: AnimKey[];
+}
+
+export interface AnimClip {
+  id: string;
+  name: string;
+  duration: number;
+  loop: boolean;
+  tracks: AnimTrack[];
+}
+
+export type AnimParamType = 'float' | 'bool' | 'trigger';
+export interface AnimParam {
+  name: string;
+  type: AnimParamType;
+}
+
+export interface AnimState {
+  id: string;
+  name: string;
+  /** Keyframe clip played in this state (AnimClip id). */
+  clip: string;
+  /** glTF skeletal clip name played on the entity's 3D Model. */
+  modelClip: string;
+  speed: number;
+  x: number;
+  y: number;
+}
+
+export interface AnimCondition {
+  param: string;
+  op: '>' | '<' | '==' | '!=';
+  value: number;
+}
+
+export interface AnimTransition {
+  id: string;
+  /** State id, or "any". */
+  from: string;
+  to: string;
+  /** Cross-fade length in seconds. */
+  duration: number;
+  /** Only leave once the clip finished (non-looping clips). */
+  exitTime: boolean;
+  conditions: AnimCondition[];
+}
+
+/** An animation controller: clips + a state machine. Attach with the Animator component. */
+export interface AnimatorData {
+  id: string;
+  name: string;
+  params: AnimParam[];
+  clips: AnimClip[];
+  states: AnimState[];
+  transitions: AnimTransition[];
+  entry: string;
+}
+
 /** action name -> list of input codes (KeyboardEvent.code, "Mouse0", "Pad0"...) */
 export type InputMap = Record<string, string[]>;
 
@@ -167,6 +240,8 @@ export interface ProjectData {
   scripts: ScriptData[];
   graphs: GraphData[];
   prefabs: PrefabData[];
+  /** Animation controllers (optional in old projects). */
+  animators?: AnimatorData[];
 }
 
 export type LogLevel = 'log' | 'info' | 'warn' | 'error';

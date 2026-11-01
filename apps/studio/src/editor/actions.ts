@@ -39,6 +39,30 @@ function download(name: string, text: string): void {
   URL.revokeObjectURL(a.href);
 }
 
+function downloadBlob(name: string, blob: Blob): void {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
+/** Build a standalone game (lazy-loaded) and download it. */
+async function exportGame(kind: 'html' | 'zip'): Promise<void> {
+  const project = editor().project;
+  if (!project) return;
+  const { exportHtml, exportZip } = await import('../export/exportGame');
+  toast('Preparing export…', 'info');
+  try {
+    const run = kind === 'html' ? exportHtml : exportZip;
+    const { blob, name, skipped } = await run(project, () => undefined);
+    downloadBlob(name, blob);
+    toast(skipped.length ? `Exported ${name} (${skipped.length} asset${skipped.length > 1 ? 's' : ''} could not be included: ${skipped.slice(0, 3).join(', ')})` : `Exported ${name} (${(blob.size / 1048576).toFixed(1)} MB)`, skipped.length ? 'info' : 'success');
+  } catch (err) {
+    toast((err as Error).message, 'error');
+  }
+}
+
 export const ACTIONS: EditorAction[] = [
   // ── File
   { id: 'file.home', label: 'All projects', group: 'File', icon: 'House', run: () => (window.location.href = '/') },
@@ -54,6 +78,8 @@ export const ACTIONS: EditorAction[] = [
       download(`${p.name.replace(/[^\w-]+/g, '_')}.bazi.json`, JSON.stringify(p, null, 2));
     },
   },
+  { id: 'file.export.html', label: 'Export game: single HTML file', group: 'File', icon: 'Download', run: () => void exportGame('html') },
+  { id: 'file.export.zip', label: 'Export game: ZIP for web hosting', group: 'File', icon: 'Archive', run: () => void exportGame('zip') },
   { id: 'file.settings', label: 'Project settings', group: 'File', icon: 'Settings', run: () => editor().set({ rightTab: 'settings' }) },
 
   // ── Edit

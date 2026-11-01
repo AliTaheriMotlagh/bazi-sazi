@@ -13,6 +13,9 @@ import {
   duplicateScene,
   instantiatePrefab,
   newGraph,
+  newAnimator,
+  updateAnimator,
+  deleteAnimator,
   newScript,
   renameScene,
   updateGraph,
@@ -74,7 +77,7 @@ export async function uploadFiles(files: File[]): Promise<void> {
   }
 }
 
-type Folder = 'starter' | 'starter:model' | 'starter:image' | 'starter:audio' | 'starter:video' | 'files' | 'scripts' | 'graphs' | 'prefabs' | 'scenes';
+type Folder = 'starter' | 'starter:model' | 'starter:image' | 'starter:audio' | 'starter:video' | 'files' | 'scripts' | 'graphs' | 'animations' | 'prefabs' | 'scenes';
 
 const FOLDERS: { id: Folder; label: string; icon: string; depth: number }[] = [
   { id: 'starter', label: 'Starter Content', icon: 'Library', depth: 0 },
@@ -85,6 +88,7 @@ const FOLDERS: { id: Folder; label: string; icon: string; depth: number }[] = [
   { id: 'files', label: 'Project Files', icon: 'FolderOpen', depth: 0 },
   { id: 'scripts', label: 'Scripts', icon: 'FileCode', depth: 0 },
   { id: 'graphs', label: 'Visual Scripts', icon: 'Workflow', depth: 0 },
+  { id: 'animations', label: 'Animations', icon: 'Clapperboard', depth: 0 },
   { id: 'prefabs', label: 'Prefabs', icon: 'Package', depth: 0 },
   { id: 'scenes', label: 'Scenes', icon: 'Clapperboard', depth: 0 },
 ];
@@ -233,6 +237,20 @@ export function ContentBrowser() {
             { label: 'Delete', icon: 'Trash', danger: true, onSelect: () => confirm(`Delete "${g.name}"?`) && (editor().closeDoc(`graph:${g.id}`), deleteGraph(g.id)) },
           ],
         }));
+      case 'animations':
+        return (project.animators ?? []).map((a) => ({
+          key: a.id,
+          name: a.name,
+          type: 'animator',
+          icon: 'Clapperboard',
+          badge: `${a.clips.length} clip${a.clips.length === 1 ? '' : 's'}`,
+          active: docs === `anim:${a.id}`,
+          open: () => editor().openAnimator(a.id),
+          menu: [
+            { label: 'Rename', icon: 'Pencil', onSelect: () => { const n = promptName('Animator name', a.name); if (n) updateAnimator(a.id, (x) => void (x.name = n), 'Rename animator'); } },
+            { label: 'Delete', icon: 'Trash', danger: true, onSelect: () => confirm(`Delete "${a.name}"?`) && (editor().closeDoc(`anim:${a.id}`), deleteAnimator(a.id)) },
+          ],
+        }));
       case 'prefabs':
         return project.prefabs.map((p) => {
           const model = p.entities[0]?.components.find((c) => c.type === 'Model');
@@ -276,13 +294,14 @@ export function ContentBrowser() {
   const q = query.trim().toLowerCase();
   const shown = q ? tiles.filter((t) => t.name.toLowerCase().includes(q) || t.sample?.tags.some((tag) => tag.includes(q))) : tiles;
   const count = (f: Folder) =>
-    f.startsWith('starter') ? samples.filter((s) => !f.includes(':') || s.type === f.split(':')[1]).length : { files: project.assets.length, scripts: project.scripts.length, graphs: project.graphs.length, prefabs: project.prefabs.length, scenes: project.scenes.length }[f as 'files'];
+    f.startsWith('starter') ? samples.filter((s) => !f.includes(':') || s.type === f.split(':')[1]).length : { files: project.assets.length, scripts: project.scripts.length, graphs: project.graphs.length, animations: (project.animators ?? []).length, prefabs: project.prefabs.length, scenes: project.scenes.length }[f as 'files'];
 
   const placeSample = placeSampleById;
 
   const createNew = () => {
     if (folder === 'scripts') newScript('New Script', { attachTo: editor().selection[0] });
     else if (folder === 'graphs') newGraph('New Logic', editor().selection[0]);
+    else if (folder === 'animations') newAnimator('New Animator', editor().selection[0]);
     else if (folder === 'scenes') {
       const n = promptName('Scene name', 'Level 2');
       if (n) addScene(n);

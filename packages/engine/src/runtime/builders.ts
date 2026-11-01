@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { prop } from '../components/registry';
+import { decodeHeights, flatHeights, terrainMesh } from '../project/terrain';
 import type { ComponentData } from '../types';
 import { DEG2RAD } from '../util';
 import type { GameObject } from './GameObject';
@@ -14,7 +15,8 @@ export interface Visual {
   update?(dt: number): void;
   setColor?(color: string): void;
   setText?(text: string): void;
-  playAnimation?(name: string): void;
+  setOpacity?(opacity: number): void;
+  playAnimation?(name: string, fade?: number): void;
   dispose(): void;
 }
 
@@ -74,6 +76,10 @@ function buildMesh(go: GameObject, c: ComponentData, rt: Runtime): Visual {
     kind: 'Mesh',
     object: mesh,
     setColor: (color) => material.color.set(color),
+    setOpacity: (o) => {
+      material.opacity = o;
+      material.transparent = o < 1;
+    },
     dispose: () => {
       mesh.removeFromParent();
       material.dispose();
@@ -132,11 +138,65 @@ function buildSprite(go: GameObject, c: ComponentData, rt: Runtime): Visual {
       if (billboard) faceCamera(mesh, rt.camera);
     },
     setColor: (color) => material.color.set(color),
+    setOpacity: (o) => (material.opacity = o),
     dispose() {
       mesh.removeFromParent();
       geometry.dispose();
       material.dispose();
       if (texture && texture !== base) texture.dispose();
+    },
+  };
+}
+
+/** Build the geometry of a Terrain component (shared with the editor's sculpting). */
+export function buildTerrainGeometry(c: ComponentData): THREE.BufferGeometry {
+  const resolution = Math.max(8, Math.min(128, Math.round(prop<number>(c, 'resolution'))));
+  const size = prop<number>(c, 'size');
+  const height = prop<number>(c, 'height');
+  const heights = prop<string>(c, 'heights') || flatHeights(resolution);
+  const levels = decodeHeights(heights, resolution);
+  const { positions, indices } = terrainMesh(levels, resolution, size, height);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const uv = new Float32Array((resolution + 1) * (resolution + 1) * 2);
+  const colors = new Float32Array((resolution + 1) * (resolution + 1) * 3);
+  const low = new THREE.Color(prop<string>(c, 'lowColor'));
+  const high = new THREE.Color(prop<string>(c, 'highColor'));
+  const tmp = new THREE.Color();
+  for (let i = 0; i < levels.length; i++) {
+    uv[i * 2] = (i % (resolution + 1)) / resolution;
+    uv[i * 2 + 1] = 1 - Math.floor(i / (resolution + 1)) / resolution;
+    tmp.copy(low).lerp(high, Math.max(0, Math.min(1, (levels[i] - 64) / 120)));
+    colors.set([tmp.r, tmp.g, tmp.b], i * 3);
+  }
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function buildTerrain(go: GameObject, c: ComponentData, rt: Runtime): Visual {
+  const geometry = buildTerrainGeometry(c);
+  const texture = rt.assets.texture(prop<string>(c, 'texture'));
+  if (texture) {
+    const repeat = prop<number>(c, 'textureRepeat');
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(repeat, repeat);
+  }
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, map: texture, roughness: 0.95, metalness: 0 });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.receiveShadow = true;
+  mesh.castShadow = true;
+  go.object3d.add(mesh);
+  return {
+    kind: 'Terrain',
+    object: mesh,
+    dispose() {
+      mesh.removeFromParent();
+      geometry.dispose();
+      material.dispose();
     },
   };
 }
@@ -155,7 +215,7 @@ function buildModel(go: GameObject, c: ComponentData, rt: Runtime): Visual {
     return clips.find((x) => x.name.toLowerCase() === n) ?? clips.find((x) => x.name.toLowerCase().includes(n));
   };
   /** Cross-fade to a clip by (partial) name; unknown names are ignored. */
-  const play = (name: string, fallbackFirst = false) => {
+  const play = (name: string, fallbackFirst = false, fade = 0.15) => {
     if (!mixer) {
       pending = name;
       return;
@@ -167,8 +227,8 @@ function buildModel(go: GameObject, c: ComponentData, rt: Runtime): Visual {
       if (/attack|shoot|hit/i.test(clip.name)) next.reset().play();
       return;
     }
-    next.reset().setEffectiveWeight(1).fadeIn(0.15).play();
-    current?.fadeOut(0.15);
+    next.reset().setEffectiveWeight(1).fadeIn(fade).play();
+    current?.fadeOut(fade);
     current = next;
   };
   rt.assets
@@ -203,7 +263,7 @@ function buildModel(go: GameObject, c: ComponentData, rt: Runtime): Visual {
     kind: 'Model',
     object: holder,
     update: (dt) => mixer?.update(dt),
-    playAnimation: (name) => play(name),
+    playAnimation: (name, fade) => play(name, false, fade),
     setColor: (color) =>
       holder.traverse((o) => {
         const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
@@ -422,6 +482,7 @@ type Builder = (go: GameObject, c: ComponentData, rt: Runtime) => Visual;
 const BUILDERS: Record<string, Builder> = {
   Mesh: buildMesh,
   Sprite: buildSprite,
+  Terrain: buildTerrain,
   Model: buildModel,
   Text: buildText,
   Light: buildLight,

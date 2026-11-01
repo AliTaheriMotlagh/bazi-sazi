@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, type ProjectSummary } from '../api/client';
 import { useAuth } from '../store/auth';
+import { isNetworkError, localSummaries } from '../store/offline';
 import { toast } from '../store/ui';
 import { Icon } from '../ui/Icon';
 import { Spinner, useMenu } from '../ui/primitives';
@@ -33,6 +34,14 @@ export function HomePage() {
     try {
       setProjects((await api.projects()).projects);
     } catch (err) {
+      // Server unreachable: show what is stored on this device so work can continue.
+      if (isNetworkError(err)) {
+        const local = await localSummaries();
+        if (local.length) {
+          toast('You are offline — showing projects stored on this device', 'info');
+          return setProjects(local);
+        }
+      }
       toast((err as Error).message, 'error');
       setProjects([]);
     }

@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { useAuth } from '../store/auth';
 import { useConsole } from '../store/console';
 import { editor, useEditor, type BottomTab, type RightTab } from '../store/editor';
+import { isNetworkError, loadProject, markSynced, saveLocal } from '../store/offline';
 import { toast } from '../store/ui';
 import { Icon } from '../ui/Icon';
 import { Spinner } from '../ui/primitives';
@@ -158,10 +159,20 @@ export default function EditorPage() {
     let cancelled = false;
     void (async () => {
       try {
-        await useAuth.getState().ensure();
-        const rec = await api.project(id);
+        // Offline with a stored token is fine: only mint a guest session when online.
+        if (!useAuth.getState().user && navigator.onLine !== false) await useAuth.getState().ensure().catch(() => undefined);
+        const { record: rec, offline, restored } = await loadProject(id, () =>
+          window.confirm('This project was changed on another device while you worked offline.\n\nOK = keep your offline changes (overwrites the server copy)\nCancel = use the server version'),
+        );
         if (cancelled) return;
         editor().open(rec.id, normalizeProject(rec.data));
+        if (offline) {
+          editor().set({ saveState: 'offline' });
+          toast('Offline — editing the copy stored on this device. Changes sync when you reconnect.', 'info');
+        } else if (restored) {
+          editor().set({ saveState: 'unsaved' });
+          toast('Restored your unsynced offline changes.', 'info');
+        }
         setPublished(rec.game ? { slug: rec.game.slug, title: rec.game.title, description: rec.game.description } : null);
         document.title = `${rec.data.name} — Bazi-Sazi`;
         try {
@@ -208,13 +219,21 @@ export default function EditorPage() {
     const thumbnail = wantThumb ? viewportBridge.capture() : null;
     if (thumbnail) lastThumb.current = Date.now();
     editor().set({ saveState: 'saving' });
+    // Local first: the edit is safe on this device even if the request below fails.
+    const seq = await saveLocal(projectId, data, thumbnail);
     saving.current = api
       .saveProject(projectId, data, thumbnail)
-      .then(() => {
+      .then(async (res) => {
+        await markSynced(projectId, seq, res.updatedAt);
         editor().set({ saveState: editor().revision === revision ? 'saved' : 'unsaved' });
         return true;
       })
       .catch((err) => {
+        if (isNetworkError(err)) {
+          if (editor().saveState !== 'offline') toast('You are offline — changes are stored on this device and will sync automatically.', 'info');
+          editor().set({ saveState: editor().revision === revision ? 'offline' : 'unsaved' });
+          return true;
+        }
         editor().set({ saveState: 'error' });
         toast(`Save failed: ${(err as Error).message}`, 'error');
         return false;
@@ -240,7 +259,7 @@ export default function EditorPage() {
       timer = setTimeout(() => void save(), AUTOSAVE_MS);
     });
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (editor().saveState !== 'saved') e.preventDefault();
+      if (editor().saveState !== 'saved' && editor().saveState !== 'offline') e.preventDefault();
     };
     window.addEventListener('beforeunload', beforeUnload);
     return () => {

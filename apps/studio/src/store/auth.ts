@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { api, getToken, setToken, type AuthResult, type User } from '../api/client';
+import { ApiError, api, getToken, setToken, type AuthResult, type User } from '../api/client';
 
 interface AuthState {
   user: User | null;
@@ -14,8 +14,17 @@ interface AuthState {
 }
 
 export const useAuth = create<AuthState>((set, get) => {
+  const remember = (user: User | null) => {
+    try {
+      if (user) localStorage.setItem('bz.user', JSON.stringify(user));
+      else localStorage.removeItem('bz.user');
+    } catch {
+      /* storage unavailable */
+    }
+  };
   const accept = ({ token, user }: AuthResult) => {
     setToken(token);
+    remember(user);
     set({ user });
     return user;
   };
@@ -26,9 +35,21 @@ export const useAuth = create<AuthState>((set, get) => {
       if (!getToken()) return set({ ready: true });
       try {
         const { user } = await api.me();
+        remember(user);
         set({ user, ready: true });
-      } catch {
+      } catch (err) {
+        // Offline is not "signed out": keep the session and use the remembered user.
+        if (!(err instanceof ApiError) || err.status >= 500) {
+          let cached: User | null = null;
+          try {
+            cached = JSON.parse(localStorage.getItem('bz.user') ?? 'null') as User | null;
+          } catch {
+            /* ignore */
+          }
+          return set({ user: cached, ready: true });
+        }
         setToken(null);
+        remember(null);
         set({ user: null, ready: true });
       }
     },
@@ -40,6 +61,7 @@ export const useAuth = create<AuthState>((set, get) => {
     },
     logout() {
       setToken(null);
+      remember(null);
       set({ user: null });
     },
   };

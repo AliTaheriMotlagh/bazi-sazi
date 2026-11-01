@@ -12,8 +12,10 @@
     "node": ">=22.13"
   },
   "scripts": {
+    "predev": "npm run build:standalone",
     "dev": "concurrently -k -n server,studio -c blue,magenta \"npm run dev -w @bazi/server\" \"npm run dev -w @bazi/studio\"",
-    "build": "npm run build -w @bazi/studio",
+    "build": "npm run build:standalone && npm run build -w @bazi/studio",
+    "build:standalone": "node scripts/build-standalone.mjs",
     "start": "npm run start -w @bazi/server",
     "typecheck": "tsc -p packages/engine --noEmit && tsc -p apps/studio --noEmit && tsc -p apps/server --noEmit",
     "test": "vitest run",

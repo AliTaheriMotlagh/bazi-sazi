@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { prop } from '../components/registry';
+import { AnimatorInstance, type AnimPose } from '../project/animation';
 import type { ComponentData, Vec3 } from '../types';
 import { DEG2RAD, damp, lerp } from '../util';
 import type { Behaviour, GameObject } from './GameObject';
@@ -454,7 +455,66 @@ const AudioSource: BehaviourFactory = (go, c, rt) => {
   };
 };
 
+/**
+ * Plays an animation controller. Parameters are read from `self.vars`
+ * (floats, bools, triggers), so scripts, visual graphs and other behaviours
+ * drive it without any glue.
+ */
+const Animator: BehaviourFactory = (go, c, rt) => {
+  const ref = prop<string>(c, 'controller');
+  const data = rt.project.animators?.find((a) => a.id === ref || a.name === ref);
+  if (!data) {
+    if (ref) rt.log({ level: 'warn', message: `Animator: controller "${ref}" not found`, entityId: go.id });
+    return {};
+  }
+  const inst = new AnimatorInstance(data);
+  const apply = (pose: AnimPose) => {
+    const p = go.object3d.position;
+    const r = go.object3d.rotation;
+    const sc = go.object3d.scale;
+    let moved = false;
+    for (const [target, value] of Object.entries(pose)) {
+      if (target === 'color') {
+        go.setColor(String(value));
+        continue;
+      }
+      const n = Number(value);
+      if (target === 'opacity') {
+        for (const v of go.visuals) v.setOpacity?.(n);
+        continue;
+      }
+      if (target.startsWith('vars.')) {
+        go.vars[target.slice(5)] = n;
+        continue;
+      }
+      const [group, axis] = target.split('.');
+      const key = axis as 'x' | 'y' | 'z';
+      if (group === 'position') p[key] = n;
+      else if (group === 'rotation') r[key] = n * DEG2RAD;
+      else if (group === 'scale') sc[key] = n;
+      else continue;
+      moved = true;
+    }
+    if (moved) rt.physics?.teleport(go);
+  };
+  return {
+    start() {
+      for (const p of data.params) if (go.vars[p.name] === undefined) go.vars[p.name] = p.type === 'float' ? 0 : false;
+    },
+    update(dt) {
+      const frame = inst.update(dt * prop<number>(c, 'speed'), go.vars);
+      apply(frame.pose);
+      if (frame.modelClip) for (const v of go.visuals) v.playAnimation?.(frame.modelClip.name, frame.modelClip.fade);
+      if (frame.entered) {
+        go.vars.animState = data.states.find((s) => s.id === frame.entered)?.name ?? '';
+        go.send('animationState', { state: go.vars.animState });
+      }
+    },
+  };
+};
+
 export const BEHAVIOURS: Record<string, BehaviourFactory> = {
+  Animator,
   PlatformerController,
   TopDownController,
   FirstPersonController,

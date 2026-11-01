@@ -2,6 +2,14 @@ import {
   comp,
   createComponent,
   createEntity,
+  createAnimator,
+  decodeHeights,
+  encodeHeights,
+  flatHeights,
+  originShift,
+  paintCells,
+  floodCells,
+  type AnimatorData,
   createGraph,
   createPrefab,
   createScene,
@@ -159,7 +167,10 @@ export function moveComponent(entityId: string, index: number, delta: number): v
 export function setComponentProp(entityId: string, index: number, key: string, value: unknown): void {
   updateEntity(entityId, (e) => {
     const c = e.components[index];
-    if (c) c[key] = value;
+    if (!c) return;
+    c[key] = value;
+    // A different grid size makes the old sculpt meaningless.
+    if (c.type === 'Terrain' && key === 'resolution') c.heights = '';
   }, 'Edit property', `${entityId}:${index}:${key}`);
 }
 
@@ -372,6 +383,7 @@ export const PRESETS: Preset[] = [
   { label: '3D Model', group: '3D Shapes', icon: 'Shapes', modes: ['3d'], build: () => ({ name: 'Model', components: [comp('Model')] }) },
   { label: 'Sprite', group: '2D', icon: 'Image', build: () => ({ name: 'Sprite', components: [comp('Sprite', { color: '#4cc9f0' })] }) },
   { label: 'Solid Block', group: '2D', icon: 'Square', modes: ['2d'], build: () => ({ name: 'Block', components: [comp('Sprite', { color: '#8d5a3b' }), comp('Collider')] }) },
+  { label: 'Terrain', group: '3D Shapes', icon: 'Mountain', modes: ['3d'], build: () => ({ name: 'Terrain', components: [comp('Terrain')] }) },
   { label: 'Tile Map', group: '2D', icon: 'Grid3x3', build: () => ({ name: 'Tile Map', components: [comp('TileMap')] }) },
   { label: 'Platformer Player', group: 'Characters', icon: 'Footprints', build: () => ({ name: 'Player', tags: ['player'], position: [0, 1, 0], components: [editor().project?.settings.mode === '3d' ? comp('Mesh', { shape: 'capsule' }) : comp('Sprite', { color: '#4361ee', width: 0.8, height: 1.1 }), comp('RigidBody', { lockRotation: true }), comp('Collider', { friction: 0 }), comp('PlatformerController')] }) },
   { label: 'Top-Down Player', group: 'Characters', icon: 'Move', build: () => ({ name: 'Player', tags: ['player'], position: [0, editor().project?.settings.mode === '3d' ? 1 : 0, 0], components: [editor().project?.settings.mode === '3d' ? comp('Mesh', { shape: 'capsule' }) : comp('Sprite', { color: '#4cc9f0' }), comp('RigidBody', { lockRotation: true, gravityScale: editor().project?.settings.mode === '3d' ? 1 : 0 }), comp('Collider'), comp('TopDownController')] }) },
@@ -407,3 +419,84 @@ export function createFromPreset(preset: Preset, parent: string | null = null): 
   const init = preset.build();
   return addEntity({ ...init, parent }, { label: `Create ${preset.label}` });
 }
+
+// ───────────────────────── animation controllers
+export function newAnimator(name = 'Animator', attachTo?: string): string {
+  const project = editor().project!;
+  const animator = createAnimator(uniqueName((project.animators ?? []).map((a) => a.name), name));
+  editor().apply(`New animator ${animator.name}`, (d) => {
+    (d.animators ??= []).push(animator);
+    if (attachTo) sceneOf(d).entities.find((e) => e.id === attachTo)?.components.push(comp('Animator', { controller: animator.id }));
+  });
+  editor().openAnimator(animator.id);
+  return animator.id;
+}
+
+export function updateAnimator(id: string, recipe: (a: AnimatorData) => void, label = 'Edit animation', key?: string): void {
+  editor().apply(label, (d) => {
+    const a = d.animators?.find((x) => x.id === id);
+    if (a) recipe(a);
+  }, key);
+}
+
+export function deleteAnimator(id: string): void {
+  editor().apply('Delete animator', (d) => {
+    d.animators = (d.animators ?? []).filter((a) => a.id !== id);
+  });
+}
+
+// ───────────────────────── level tools
+const tileMapOf = (e: EntityData | undefined) => e?.components.find((c) => c.type === 'TileMap');
+
+/**
+ * Paint tiles on a TileMap entity. If the grid grows left/up, the entity moves
+ * by the same amount so every existing tile stays where it was in the world.
+ */
+let strokeSeq = 0;
+/** Each mouse stroke is one undo step: call at pointer-down. */
+export const beginStroke = (): number => ++strokeSeq;
+
+export function paintTileMap(entityId: string, cells: Array<[number, number]>, char: string, label = 'Paint tiles'): void {
+  if (!cells.length) return;
+  const mode2d = editor().project?.settings.mode === '2d';
+  updateEntity(entityId, (e) => {
+    const map = tileMapOf(e);
+    if (!map) return;
+    const size = Number(map.tileSize ?? 1);
+    const current = String(map.map ?? '');
+    const res = paintCells(current, cells, char);
+    if (res.map === current) return;
+    map.map = res.map;
+    if (res.shiftCols || res.shiftRows) e.transform.position = originShift(e.transform.position, res.shiftCols, res.shiftRows, size, mode2d);
+  }, label, `paint:${entityId}:${strokeSeq}`);
+}
+
+export function fillTileMap(entityId: string, col: number, row: number, char: string): void {
+  const e = findEntity(entityId);
+  const map = tileMapOf(e);
+  if (!map) return;
+  const cells = floodCells(String(map.map ?? ''), col, row);
+  if (cells.length) paintTileMap(entityId, cells, char, 'Fill tiles');
+}
+
+/** Write terrain heights (hex string) without rebuilding the whole component. */
+export function setTerrainHeights(entityId: string, heights: string, key = `sculpt:${entityId}:${strokeSeq}`): void {
+  updateEntity(entityId, (e) => {
+    const t = e.components.find((c) => c.type === 'Terrain');
+    if (t) t.heights = heights;
+  }, 'Sculpt terrain', key);
+}
+
+export function terrainLevels(entityId: string): { levels: Uint8Array; resolution: number } | null {
+  const t = findEntity(entityId)?.components.find((c) => c.type === 'Terrain');
+  if (!t) return null;
+  const resolution = Math.max(8, Math.min(128, Math.round(Number(t.resolution ?? 48))));
+  return { levels: decodeHeights(String(t.heights ?? ''), resolution), resolution };
+}
+
+export function resetTerrain(entityId: string): void {
+  const info = terrainLevels(entityId);
+  if (info) setTerrainHeights(entityId, flatHeights(info.resolution), `reset:${entityId}`);
+}
+
+export { encodeHeights };

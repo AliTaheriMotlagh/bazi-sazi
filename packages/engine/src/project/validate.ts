@@ -101,6 +101,11 @@ export function validateProject(project: ProjectData): Problem[] {
       }
     }
     if (c.type === 'RouteBuilder' && !hasPrefab(String(c.vehicle ?? ''))) out.push({ severity: 'warning', message: `${name}: Route Builder has no vehicle prefab, so no trains will run.`, ...at });
+    if (c.type === 'Animator') {
+      const ref = String(c.controller ?? '');
+      if (!ref) out.push({ severity: 'warning', message: `${name}: Animator has no controller.`, ...at });
+      else if (!(project.animators ?? []).some((a) => a.id === ref || a.name === ref)) out.push({ severity: 'error', message: `${name}: Animator uses a missing controller.`, ...at });
+    }
     if (c.type === 'TileMap') {
       for (const line of String(c.legend ?? '').split('\n')) {
         const idx = line.indexOf('=');

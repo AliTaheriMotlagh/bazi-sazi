@@ -35,5 +35,6 @@ export function normalizeProject(project: ProjectData): ProjectData {
     scripts: project.scripts ?? [],
     graphs: project.graphs ?? [],
     prefabs: project.prefabs ?? [],
+    animators: project.animators ?? [],
   };
 }

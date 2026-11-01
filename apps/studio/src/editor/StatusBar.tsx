@@ -27,7 +27,7 @@ export function StatusBar() {
   useEffect(() => {
     api.config().then(setCfg).catch(() => undefined);
   }, []);
-  const label = { saved: 'All changes saved', saving: 'Saving…', unsaved: 'Unsaved changes', error: 'Save failed' }[saveState];
+  const label = { saved: 'All changes saved', saving: 'Saving…', unsaved: 'Unsaved changes', error: 'Save failed', offline: 'Saved on this device — will sync' }[saveState];
   return (
     <footer className="statusbar">
       <span className="status-item"><span className={`save-dot ${saveState}`} /> {label}</span>

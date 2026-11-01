@@ -23,6 +23,7 @@ import { Icon } from '../../ui/Icon';
 import { Switch, useMenu, type MenuItem } from '../../ui/primitives';
 import { useSession } from '../session';
 import { FieldEditor, TagsInput, Vec3Input } from './Fields';
+import { TerrainTools, TilePainter } from './LevelTools';
 
 function ComponentCard({ entity, component, index }: { entity: EntityData; component: ComponentData; index: number }) {
   const schema = getComponentSchema(component.type);
@@ -66,6 +67,8 @@ function ComponentCard({ entity, component, index }: { entity: EntityData; compo
           ) : (
             <div className="faint">Unknown component type “{component.type}”.</div>
           )}
+          {component.type === 'TileMap' && <TilePainter entity={entity} component={component} index={index} />}
+          {component.type === 'Terrain' && <TerrainTools entity={entity} />}
         </div>
       )}
       {menu.element}

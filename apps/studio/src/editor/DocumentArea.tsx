@@ -8,6 +8,7 @@ import { SceneView } from './viewport/SceneView';
 // Heavy editors load on first use.
 const ScriptEditor = lazy(() => import('./panels/ScriptEditor'));
 const LogicEditor = lazy(() => import('./panels/LogicEditor'));
+const AnimationEditor = lazy(() => import('./panels/AnimationEditor'));
 
 function useDocInfo(key: DocKey): { label: string; icon: string } {
   // Select a primitive so the tab only re-renders when its own title changes.
@@ -15,10 +16,10 @@ function useDocInfo(key: DocKey): { label: string; icon: string } {
     if (key === 'scene') return s.project?.scenes.find((x) => x.id === s.sceneId)?.name ?? 'Scene';
     if (key === 'game') return 'Game';
     const id = key.slice(key.indexOf(':') + 1);
-    const name = key.startsWith('script:') ? s.project?.scripts.find((x) => x.id === id)?.name : s.project?.graphs.find((x) => x.id === id)?.name;
+    const name = key.startsWith('script:') ? s.project?.scripts.find((x) => x.id === id)?.name : key.startsWith('anim:') ? s.project?.animators?.find((x) => x.id === id)?.name : s.project?.graphs.find((x) => x.id === id)?.name;
     return name ?? '(deleted)';
   });
-  const icon = key === 'scene' ? 'Clapperboard' : key === 'game' ? 'Gamepad2' : key.startsWith('script:') ? 'FileCode' : 'Workflow';
+  const icon = key === 'scene' ? 'Clapperboard' : key === 'game' ? 'Gamepad2' : key.startsWith('script:') ? 'FileCode' : key.startsWith('anim:') ? 'Clapperboard' : 'Workflow';
   return { label, icon };
 }
 
@@ -67,10 +68,10 @@ export function DocumentArea() {
         )}
         <Suspense fallback={<div className="empty"><Spinner /></div>}>
           {docs
-            .filter((k) => k.startsWith('script:') || k.startsWith('graph:'))
+            .filter((k) => k.startsWith('script:') || k.startsWith('graph:') || k.startsWith('anim:'))
             .map((k) => (
               <div key={k} className="doc-pane" hidden={active !== k}>
-                {k.startsWith('script:') ? <ScriptEditor id={k.slice(7)} /> : <LogicEditor id={k.slice(6)} />}
+                {k.startsWith('script:') ? <ScriptEditor id={k.slice(7)} /> : k.startsWith('anim:') ? <AnimationEditor id={k.slice(5)} /> : <LogicEditor id={k.slice(6)} />}
               </div>
             ))}
         </Suspense>

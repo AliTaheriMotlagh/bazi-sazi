@@ -155,16 +155,22 @@ The assistant talks to any OpenAI-compatible endpoint, by default OpenRouter:
 
 `npm test` runs 39 tests: every template must build and pass the audit, script compilation (JS/TS) and error reporting, the visual-scripting VM (data flow, branching, loops, delays, tag filters), and server integration (auth, projects, publishing, slugs, likes/plays, uploads, subdomain routing, TLS checks and a real multi-client WebSocket multiplayer session).
 
+## Level tools, animation and offline
+
+- **Tile painter**: select a Tile Map → Details panel → palette, brush/eraser/bucket/rectangle, clickable grid, and "Paint directly in the scene view". The grid grows in any direction.
+- **Terrain** (3D): add via Create → Terrain, pick Raise/Lower/Smooth/Flatten and drag on it in the scene view (Shift inverts). Solid terrain gets a physics collider.
+- **Animation**: Content Browser → Animations (or Animator component → New). Keyframe clips (position/rotation/scale/opacity/color/`vars.*`) on a timeline, plus a state-machine graph with parameters, conditions, exit-time and cross-fade blends. States can also cross-fade glTF skeletal clips. Drive parameters from code with `self.vars.speed = 3`.
+- **Offline**: every save is written to IndexedDB first and synced to the server when reachable (status bar shows "Saved on this device"). Existing projects open and edit offline; conflicts with another device prompt before overwriting.
+- **Export**: File → Export game → single HTML (opens by double-click) or ZIP for static hosting. Multiplayer is disabled in exports. `npm run build` also builds the standalone player (`npm run build:standalone`).
+
 ## Roadmap — not built yet
 
 Being honest about the gap to Unity/Unreal/Godot. These would be the next most valuable additions:
 
-- Visual tile-map painter, terrain editor, and a 2D/3D level grid brush
-- Animation timeline / state-machine editor; skeletal animation blending
 - Navigation meshes for free-form 3D levels (grid pathfinding already exists)
 - Shader graph / custom materials; WebGPU renderer path
 - Real-time collaborative editing (multiple people in one project) and project version history
 - Server-authoritative multiplayer option (currently host-authoritative relay) and matchmaking
 - Asset store / sharing prefabs between projects, remixing published games
-- Fully offline editing (the PWA caches the app and assets, but saving needs the server) and export to standalone HTML/ZIP or native wrappers
+- Native app wrappers (Electron/Capacitor); creating brand-new projects and uploading assets while offline
 - Accessibility audit of the node editor and localization (RTL/Persian UI)

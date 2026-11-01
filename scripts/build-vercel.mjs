@@ -18,7 +18,7 @@ const out = path.join(root, '.vercel/output');
 const fn = path.join(out, 'functions/api.func');
 
 console.log('▸ building studio');
-if (!process.argv.includes('--skip-studio')) execSync('npm run build -w @bazi/studio', { cwd: root, stdio: 'inherit' });
+if (!process.argv.includes('--skip-studio')) execSync('npm run build', { cwd: root, stdio: 'inherit' });
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(fn, { recursive: true });

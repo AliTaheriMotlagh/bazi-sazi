@@ -14,3 +14,6 @@ export * from './project/migrate';
 export { SCRIPT_API_DTS } from './docs/scriptApi';
 export { NODES, NODE_CATEGORIES, getNodeDef, type NodeDef, type PinDef, type PinKind, type NodeCategory } from './visual/nodes';
 export { compileScript } from './runtime/compile';
+export * from './project/tilemap';
+export * from './project/terrain';
+export * from './project/animation';

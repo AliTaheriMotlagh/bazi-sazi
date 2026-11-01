@@ -9,7 +9,20 @@ export type PlayState = 'edit' | 'playing' | 'paused';
 export type BottomTab = 'content' | 'console' | 'problems' | 'profiler';
 export type RightTab = 'inspector' | 'ai' | 'settings';
 /** Center document tabs (like Unreal's asset editors): the scene, the running game, scripts and graphs. */
-export type DocKey = 'scene' | 'game' | `script:${string}` | `graph:${string}`;
+export type DocKey = 'scene' | 'game' | `script:${string}` | `graph:${string}` | `anim:${string}`;
+/** Tile-map painter state; while set (and a TileMap is selected) viewport clicks paint tiles. */
+export interface PaintState {
+  tool: 'brush' | 'erase' | 'fill' | 'rect';
+  char: string;
+  /** Viewport painting on/off (the grid in the Details panel always works). */
+  viewport: boolean;
+}
+/** Terrain sculpt brush; while set (and a Terrain is selected) dragging on it sculpts. */
+export interface SculptState {
+  brush: 'raise' | 'lower' | 'smooth' | 'flatten';
+  radius: number;
+  strength: number;
+}
 export interface ViewportOptions {
   view: 'perspective' | 'top' | 'front' | 'right';
   shading: 'lit' | 'clay' | 'wireframe';
@@ -32,7 +45,8 @@ const readLayout = (): LayoutState => {
     return { place: true, outliner: true, details: true, drawer: true };
   }
 };
-export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
+/** `offline`: stored on this device, waiting to sync to the server. */
+export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error' | 'offline';
 
 /** One undoable command, stored as forward/inverse patches (command pattern). */
 interface HistoryEntry {
@@ -65,6 +79,8 @@ export interface EditorState {
   bottomMaximized: boolean;
   activeScriptId: string | null;
   activeGraphId: string | null;
+  paint: PaintState | null;
+  sculpt: SculptState | null;
   docs: DocKey[];
   activeDoc: DocKey;
   layout: LayoutState;
@@ -84,6 +100,7 @@ export interface EditorState {
   set(partial: Partial<EditorState>): void;
   openScript(id: string): void;
   openGraph(id: string): void;
+  openAnimator(id: string): void;
   openDoc(key: DocKey): void;
   closeDoc(key: DocKey): void;
   toggleLayout(part: keyof LayoutState, value?: boolean): void;
@@ -108,6 +125,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   bottomMaximized: false,
   activeScriptId: null,
   activeGraphId: null,
+  paint: null,
+  sculpt: null,
   docs: ['scene'],
   activeDoc: 'scene',
   layout: readLayout(),
@@ -130,6 +149,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       revision: 0,
       activeScriptId: project.scripts[0]?.id ?? null,
       activeGraphId: project.graphs[0]?.id ?? null,
+      paint: null,
+      sculpt: null,
       docs: ['scene'],
       activeDoc: 'scene',
     });
@@ -201,6 +222,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   openGraph(id) {
     set({ activeGraphId: id });
     get().openDoc(`graph:${id}`);
+  },
+
+  openAnimator(id) {
+    get().openDoc(`anim:${id}`);
   },
 
   openDoc(key) {
