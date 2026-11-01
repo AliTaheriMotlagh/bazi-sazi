@@ -39,7 +39,13 @@ async function request<T>(path: string, init: RequestInit & { json?: unknown } =
   }
   const res = await fetch(path, { ...init, headers, body });
   const text = await res.text();
-  const data = text ? (JSON.parse(text) as unknown) : {};
+  let data: unknown;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    // Not JSON: a platform error page (e.g. "A server error has occurred") or a proxy message.
+    throw new ApiError(res.ok ? 'The server sent an unreadable response.' : `Server error (${res.status}). The API may be misconfigured or still starting — check the deployment logs.`, res.status || 500);
+  }
   if (!res.ok) throw new ApiError((data as { error?: string }).error ?? `Request failed (${res.status})`, res.status);
   return data as T;
 }
