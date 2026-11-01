@@ -8,7 +8,9 @@ import { config as defaultConfig } from './config.ts';
 import type { AppContext } from './context.ts';
 import { openDb } from './db.ts';
 import { blobStore, diskStore, unavailableStore } from './storage.ts';
+import { collab } from './collab.ts';
 import { multiplayer } from './multiplayer.ts';
+import { simulation } from './simulation.ts';
 import { aiRoutes } from './routes/ai.ts';
 import { assetRoutes, FILES_HEADERS } from './routes/assets.ts';
 import { authRoutes } from './routes/auth.ts';
@@ -38,6 +40,8 @@ export async function buildApp(overrides: Partial<AppContext> = {}): Promise<Fas
     bodyLimit: config.limits.projectBytes,
     trustProxy: true,
   });
+  // Registered first, so it runs last on close (hooks run in reverse): modules can flush to the database first.
+  app.addHook('onClose', async () => db.close());
   app.decorateRequest('user', null);
   app.addHook('onRequest', authHook(config.jwtSecret));
   app.addHook('onSend', async (req, reply) => {
@@ -82,9 +86,12 @@ export async function buildApp(overrides: Partial<AppContext> = {}): Promise<Fas
   gameRoutes(app, ctx);
   assetRoutes(app, ctx);
   aiRoutes(app, ctx);
-  if (!config.serverless) multiplayer(app, ctx);
+  if (!config.serverless) {
+    multiplayer(app, ctx);
+    simulation(app, ctx);
+    collab(app, ctx);
+  }
   if (config.serverless) {
-    app.addHook('onClose', async () => db.close());
     return app;
   }
 
@@ -133,7 +140,6 @@ export async function buildApp(overrides: Partial<AppContext> = {}): Promise<Fas
     app.setNotFoundHandler(async (_req, reply) => reply.code(404).send({ error: 'Not found (studio not built — use `npm run dev` or `npm run build`).' }));
   }
 
-  app.addHook('onClose', async () => db.close());
   return app;
 }
 

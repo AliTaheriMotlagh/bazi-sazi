@@ -139,6 +139,7 @@ export const api = {
   slugAvailable: (slug: string, project: string) => request<{ available: boolean; reason?: string }>(`/api/slug-available?slug=${encodeURIComponent(slug)}&project=${project}`),
 
   versions: (id: string) => request<{ versions: VersionInfo[] }>(`/api/projects/${id}/versions`),
+  addCollaborator: (id: string, username: string) => post<{ collaborator: { id: string; username: string } }>(`/api/projects/${id}/collaborators`, { username }),
   saveVersion: (id: string, label: string) => post<{ ok: true }>(`/api/projects/${id}/versions`, { label }),
   restoreVersion: (id: string, versionId: string) => post<{ ok: true; updatedAt: number; data: ProjectData }>(`/api/projects/${id}/versions/${versionId}/restore`),
   remix: (slug: string) => post<{ id: string }>(`/api/games/${slug}/remix`),

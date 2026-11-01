@@ -1,4 +1,5 @@
 import { normalizeProject, type ProjectData } from '@bazi/engine/core';
+import { nativeWrapperFiles, WEB_ROOT, type NativeTarget } from './native';
 import { createZip, type ZipEntry } from './zip';
 
 /**
@@ -110,7 +111,8 @@ export async function exportHtml(source: ProjectData, progress: ExportProgress):
   return { blob: new Blob([html], { type: 'text/html' }), name: `${safeName(project.name)}.html`, skipped };
 }
 
-export async function exportZip(source: ProjectData, progress: ExportProgress): Promise<{ blob: Blob; name: string; skipped: string[] }> {
+/** With a `target`, the web files go in www/ next to a ready-to-build desktop/mobile wrapper project. */
+export async function exportZip(source: ProjectData, progress: ExportProgress, target?: NativeTarget): Promise<{ blob: Blob; name: string; skipped: string[] }> {
   progress('Loading player', 0, 1);
   const player = await fetchPlayer();
   const { project, files } = await collect(source, progress);
@@ -141,5 +143,10 @@ export async function exportZip(source: ProjectData, progress: ExportProgress): 
     },
   );
   progress('Zipping', 1, 1);
+  if (target) {
+    const wrapped = entries.map((e) => ({ ...e, path: `${WEB_ROOT}/${e.path}` }));
+    for (const f of nativeWrapperFiles(target, project.name)) wrapped.push({ path: f.path, data: enc.encode(f.content) });
+    return { blob: createZip(wrapped), name: `${safeName(project.name)}-${target}.zip`, skipped };
+  }
   return { blob: createZip(entries), name: `${safeName(project.name)}.zip`, skipped };
 }

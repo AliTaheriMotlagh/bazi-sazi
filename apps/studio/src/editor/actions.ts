@@ -1,4 +1,6 @@
 import { PRESETS, createFromPreset, deleteEntities, duplicateEntities, addScene, currentScene, newGraph, newScript } from '../store/commands';
+import { api } from '../api/client';
+import type { NativeTarget } from '../export/native';
 import { editor, type ViewportOptions } from '../store/editor';
 import { toast, useUi } from '../store/ui';
 import { editorHost, session, useSession, viewportBridge } from './session';
@@ -48,14 +50,13 @@ function downloadBlob(name: string, blob: Blob): void {
 }
 
 /** Build a standalone game (lazy-loaded) and download it. */
-async function exportGame(kind: 'html' | 'zip'): Promise<void> {
+async function exportGame(kind: 'html' | 'zip' | NativeTarget): Promise<void> {
   const project = editor().project;
   if (!project) return;
   const { exportHtml, exportZip } = await import('../export/exportGame');
   toast('Preparing export…', 'info');
   try {
-    const run = kind === 'html' ? exportHtml : exportZip;
-    const { blob, name, skipped } = await run(project, () => undefined);
+    const { blob, name, skipped } = kind === 'html' ? await exportHtml(project, () => undefined) : await exportZip(project, () => undefined, kind === 'zip' ? undefined : kind);
     downloadBlob(name, blob);
     toast(skipped.length ? `Exported ${name} (${skipped.length} asset${skipped.length > 1 ? 's' : ''} could not be included: ${skipped.slice(0, 3).join(', ')})` : `Exported ${name} (${(blob.size / 1048576).toFixed(1)} MB)`, skipped.length ? 'info' : 'success');
   } catch (err) {
@@ -80,6 +81,37 @@ export const ACTIONS: EditorAction[] = [
   },
   { id: 'file.export.html', label: 'Export game: single HTML file', group: 'File', icon: 'Download', run: () => void exportGame('html') },
   { id: 'file.export.zip', label: 'Export game: ZIP for web hosting', group: 'File', icon: 'Archive', run: () => void exportGame('zip') },
+  { id: 'file.export.electron', label: 'Export app: desktop (Electron)', group: 'File', icon: 'Monitor', run: () => void exportGame('electron') },
+  { id: 'file.export.tauri', label: 'Export app: desktop (Tauri)', group: 'File', icon: 'Monitor', run: () => void exportGame('tauri') },
+  { id: 'file.export.capacitor', label: 'Export app: Android / iOS (Capacitor)', group: 'File', icon: 'Smartphone', run: () => void exportGame('capacitor') },
+  {
+    id: 'file.collab',
+    label: 'Live collaboration: start / stop',
+    group: 'File',
+    icon: 'Users',
+    run: () =>
+      void import('../collab/connect').then(({ startCollab, stopCollab, useCollab }) => {
+        if (useCollab.getState().status === 'off') {
+          startCollab();
+          toast('Connecting to live collaboration…', 'info');
+        } else stopCollab();
+      }),
+  },
+  {
+    id: 'file.collab.invite',
+    label: 'Invite a collaborator…',
+    group: 'File',
+    icon: 'Users',
+    run: () => {
+      const projectId = editor().projectId;
+      const username = projectId ? window.prompt('Username of the person to invite (they need an account):') : null;
+      if (!projectId || !username) return;
+      void api.addCollaborator(projectId, username.trim()).then(
+        () => toast(`${username} can now edit this project. Both of you choose "Live collaboration".`, 'success'),
+        (err: Error) => toast(err.message, 'error'),
+      );
+    },
+  },
   { id: 'file.history', label: 'Version history…', group: 'File', icon: 'Clock', run: () => editorHost.openHistory() },
   { id: 'file.library', label: 'Prefab library…', group: 'File', icon: 'Package', run: () => editorHost.openLibrary() },
   { id: 'file.settings', label: 'Project settings', group: 'File', icon: 'Settings', run: () => editor().set({ rightTab: 'settings' }) },

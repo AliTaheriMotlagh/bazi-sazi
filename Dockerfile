@@ -16,6 +16,8 @@ WORKDIR /app/apps/server
 COPY apps/server/package.json ./
 RUN npm install --omit=dev --no-package-lock && npm cache clean --force
 COPY apps/server/src ./src
+# Dependency-free engine modules the server shares with the editor (collab, authoritative simulation).
+COPY packages/engine/src/systems /app/packages/engine/src/systems
 COPY --from=build /app/apps/studio/dist /app/apps/studio/dist
 RUN mkdir -p /data && chown -R node:node /data
 USER node

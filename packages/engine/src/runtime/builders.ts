@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { prop } from '../components/registry';
+import { compileShaderGraph, parseShaderGraph } from '../systems/shaderGraph';
 import { SHADER_PRESETS, SHADER_VERTEX, shaderFragment } from './shaders';
 import { decodeHeights, flatHeights, terrainMesh } from '../project/terrain';
 import type { ComponentData } from '../types';
@@ -48,10 +49,22 @@ function faceCamera(object: THREE.Object3D, camera: THREE.Camera | null): void {
   object.quaternion.copy(_q.multiply(camera.quaternion));
 }
 
+function shaderBody(preset: string, c: ComponentData): string {
+  if (preset === 'custom') return prop<string>(c, 'code');
+  if (preset === 'graph') {
+    const graph = parseShaderGraph(prop<string>(c, 'graph'));
+    const result = graph ? compileShaderGraph(graph) : { ok: false, body: '', errors: ['The shader graph is not valid JSON.'] };
+    if (result.ok) return result.body;
+    console.warn('Shader graph:', ...result.errors);
+    return SHADER_PRESETS.hologram;
+  }
+  return SHADER_PRESETS[preset] ?? SHADER_PRESETS.hologram;
+}
+
 /** A ShaderMaterial from a Shader component (preset or user GLSL). */
 function customMaterial(c: ComponentData) {
   const preset = prop<string>(c, 'preset');
-  const body = preset === 'custom' ? prop<string>(c, 'code') : (SHADER_PRESETS[preset] ?? SHADER_PRESETS.hologram);
+  const body = shaderBody(preset, c);
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0 },

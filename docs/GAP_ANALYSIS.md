@@ -5,12 +5,17 @@ Honest list of what Bazi-Sazi does **not** have yet (as of this commit), grouped
 ## Done recently
 Tile painter, sculptable terrain, animation clips + state machine, custom shader presets/GLSL, slope-aware navigation on terrain, project version history, prefab library + remix, offline editing, HTML/ZIP export, quick-match.
 
+## Added in round 5 (engine `systems/`, all unit-tested)
+- **Navigation mesh** (`navmesh.ts`): convex polygons, funnel-smoothed any-angle paths, cost areas, off-mesh links, floors (layers); `GridPathfinder.toNavMesh()` builds one from the existing grid. Not yet used by the runtime's `moveTo` — gameplay still calls the grid pathfinder.
+- **Shader graph** (`shaderGraph.ts`): typed node graph → GLSL, selectable as the Shader component's `graph` effect (JSON field). There is no visual graph editor yet, and the renderer is still WebGL (no WebGPU).
+- **Live collaboration** (`collab.ts`, server `/ws/collab`, studio `collab/`): server-sequenced, id-addressed ops with optimistic clients; owner + invited collaborators (`project_collaborators`); menu actions *Live collaboration* / *Invite a collaborator*. Not yet: cursors/selection UI, reconnect, conflict UI. Remote structural edits clear your undo stack.
+- **Server-authoritative multiplayer** (`authoritative.ts`, server `/ws/sim`): fixed-tick server, input validation/rate cap, client prediction + reconciliation, snapshot interpolation. The server runs the built-in arena movement model; per-game server scripts and a client hookup in the runtime are not done.
+- **Native wrappers**: Electron, Tauri and Capacitor project files in the export ZIP (`export/native.ts`). The wrappers were generated and unit-tested, but not built with their toolchains.
+
 ## Still missing — big
-- **Real-time collaborative editing** (several people in one project). Needs a CRDT/OT layer over the immer-patch command model; versions/restore exist as the single-user substitute.
-- **Server-authoritative multiplayer.** Current model is host-authoritative relay (or P2P on serverless). Needs a simulation server running the engine headlessly.
-- **WebGPU renderer and a node-based shader graph.** Shaders are presets + hand-written GLSL on WebGL.
-- **True navigation meshes.** Navigation is a grid (with terrain slope blocking); no multi-floor or off-mesh links.
-- **Native/console targets.** Web only (plus HTML/ZIP export); no Electron/Capacitor wrappers.
+- Wiring the authoritative sim and navmesh into `Runtime` / game scripts (the building blocks and server rooms exist).
+- A visual shader-graph editor and a WebGPU renderer.
+- Browser-level (Playwright) tests for the editor UIs; the logic under them is covered by unit and integration tests.
 
 ## Still missing — editor features other engines have
 - Skeletal retargeting, IK, blend trees (1D/2D), animation events on the timeline, root motion.

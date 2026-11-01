@@ -17,3 +17,7 @@ export { compileScript } from './runtime/compile';
 export * from './project/tilemap';
 export * from './project/terrain';
 export * from './project/animation';
+export * from './systems/navmesh';
+export * from './systems/shaderGraph';
+export * from './systems/collab';
+export * from './systems/authoritative';

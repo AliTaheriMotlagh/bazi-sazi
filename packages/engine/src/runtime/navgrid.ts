@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { prop } from '../components/registry';
 import { decodeHeights, levelToHeight, flatHeights } from '../project/terrain';
+import { NavMesh, type OffMeshLink } from '../systems/navmesh';
 import type { GameObject } from './GameObject';
 
 const MAX_CELLS = 256 * 256;
@@ -81,6 +82,11 @@ export class GridPathfinder {
     this.cols = Math.max(1, cols);
     this.rows = Math.max(1, rows);
     this.blocked = new Uint8Array(this.cols * this.rows);
+  }
+
+  /** The same walkable area as a merged-rectangle navigation mesh (any-angle paths, links, layers). */
+  toNavMesh(links: OffMeshLink[] = []): NavMesh {
+    return NavMesh.fromGrid(this.cols, this.rows, this.cellSize, [this.bounds.minX, this.bounds.minY], this.blocked, links);
   }
 
   cellOf(x: number, y: number): [number, number] {

@@ -1,5 +1,6 @@
 import type { AssetType, ComponentData, GameMode } from '../types';
 import { DEFAULT_CUSTOM_SHADER, SHADER_PRESET_NAMES } from '../runtime/shaders';
+import { DEFAULT_SHADER_GRAPH } from '../systems/shaderGraph';
 
 /**
  * Component schemas drive everything that is component-specific outside the
@@ -114,6 +115,7 @@ export const COMPONENTS: ComponentSchema[] = [
       f('color2', 'Second color', 'color', '#a78bfa'),
       f('speed', 'Speed', 'number', 1, { step: 0.1 }),
       f('intensity', 'Intensity', 'number', 1, { min: 0, step: 0.1 }),
+      f('graph', 'Shader graph (JSON)', 'text', JSON.stringify(DEFAULT_SHADER_GRAPH, null, 1), { showIf: (p) => p.preset === 'graph', help: 'Nodes compiled to GLSL. Invalid graphs fall back to the hologram effect; errors appear in the console.' }),
       f('code', 'GLSL', 'text', DEFAULT_CUSTOM_SHADER, { showIf: (p) => p.preset === 'custom', help: 'Body of vec4 shade(uv, normal, viewDir, worldPos). GLSL errors appear in the browser console (F12).' }),
     ],
   },

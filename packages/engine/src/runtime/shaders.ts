@@ -33,7 +33,8 @@ return vec4(mix(uColor2, uColor, l) * uIntensity, 1.0);`,
 return vec4(mix(uColor, uColor2, p) * uIntensity, 1.0);`,
 };
 
-export const SHADER_PRESET_NAMES = ['custom', ...Object.keys(SHADER_PRESETS)];
+/** `custom` = hand-written GLSL, `graph` = compiled from the node graph (systems/shaderGraph.ts). */
+export const SHADER_PRESET_NAMES = ['custom', 'graph', ...Object.keys(SHADER_PRESETS)];
 
 export const DEFAULT_CUSTOM_SHADER = `// Write the body of: vec4 shade(vec2 uv, vec3 normal, vec3 viewDir, vec3 worldPos)
 // Available: uTime, uColor, uColor2, uSpeed, uIntensity
