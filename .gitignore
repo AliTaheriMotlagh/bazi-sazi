@@ -1,9 +1,11 @@
-node_modules
-dist
-data
 *.log
-.env
 .DS_Store
-apps/studio/public/standalone/
-.vercel
+.env
 .env*
+.env.local
+.vercel
+.vercel/
+apps/studio/public/standalone/
+data
+dist
+node_modules

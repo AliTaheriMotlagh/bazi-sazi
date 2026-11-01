@@ -507,7 +507,8 @@ button.status-item:hover { background: var(--surface); color: var(--text); }
 }
 @media (min-width: 1101px) { .show-tablet { display: none !important; } }
 @media (max-width: 720px) {
-  .editor { grid-template-rows: 0 var(--toolbar-h) 1fr 58px; }
+  /* The menu bar and status bar are not rendered on phones, so only three rows remain. */
+  .editor { grid-template-rows: var(--toolbar-h) minmax(0, 1fr) calc(58px + env(safe-area-inset-bottom)); }
   .menubar { display: none; }
   .hide-phone { display: none !important; }
   .drawer { width: 100%; }
