@@ -39,6 +39,9 @@ Open http://localhost:5173, pick a template, and press **▶ Play**. No sign-up 
 | `npm start` | Production server — serves studio, API, multiplayer and every published game on port 8787 |
 | `npm test` | Engine + server tests (Vitest) |
 | `npm run typecheck` | Strict TypeScript check of all packages |
+| `npm run lint` | ESLint (TypeScript + React hooks rules) |
+| `npm run check` | Typecheck + lint + tests — the same gate CI runs on every push ([ci.yml](.github/workflows/ci.yml)) |
+| `npm run format` | Prettier over sources and docs |
 
 Published games are reachable at **`http://<slug>.localhost:8787/`** (Chrome, Firefox and Edge resolve `*.localhost` automatically; in dev use port 5173) and at `/play/<slug>` inside the site.
 
@@ -150,7 +153,7 @@ The assistant talks to any OpenAI-compatible endpoint, by default OpenRouter:
 
 ## Testing
 
-`npm test` runs 28 tests: every template must build and pass the audit, script compilation (JS/TS) and error reporting, the visual-scripting VM (data flow, branching, loops, delays, tag filters), and server integration (auth, projects, publishing, slugs, likes/plays, uploads, subdomain routing, TLS checks and a real multi-client WebSocket multiplayer session).
+`npm test` runs 39 tests: every template must build and pass the audit, script compilation (JS/TS) and error reporting, the visual-scripting VM (data flow, branching, loops, delays, tag filters), and server integration (auth, projects, publishing, slugs, likes/plays, uploads, subdomain routing, TLS checks and a real multi-client WebSocket multiplayer session).
 
 ## Roadmap — not built yet
 
@@ -158,10 +161,10 @@ Being honest about the gap to Unity/Unreal/Godot. These would be the next most v
 
 - Visual tile-map painter, terrain editor, and a 2D/3D level grid brush
 - Animation timeline / state-machine editor; skeletal animation blending
-- Navigation meshes and pathfinding for AI enemies
+- Navigation meshes for free-form 3D levels (grid pathfinding already exists)
 - Shader graph / custom materials; WebGPU renderer path
 - Real-time collaborative editing (multiple people in one project) and project version history
 - Server-authoritative multiplayer option (currently host-authoritative relay) and matchmaking
 - Asset store / sharing prefabs between projects, remixing published games
-- Offline/PWA editing and export to standalone HTML/ZIP or native wrappers
+- Fully offline editing (the PWA caches the app and assets, but saving needs the server) and export to standalone HTML/ZIP or native wrappers
 - Accessibility audit of the node editor and localization (RTL/Persian UI)

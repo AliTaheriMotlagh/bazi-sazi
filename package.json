@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Bazi-Sazi \u2014 a web-native game engine studio: build, play, publish and share 2D/3D/VR multiplayer games in the browser.",
+  "description": "Bazi-Sazi — a web-native game engine studio: build, play, publish and share 2D/3D/VR multiplayer games in the browser.",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -18,7 +18,10 @@
     "typecheck": "tsc -p packages/engine --noEmit && tsc -p apps/studio --noEmit && tsc -p apps/server --noEmit",
     "test": "vitest run",
     "samples": "node scripts/generate-samples.mjs",
-    "build:vercel": "node scripts/build-vercel.mjs"
+    "build:vercel": "node scripts/build-vercel.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,css,md,json}\" --log-level warn",
+    "check": "npm run typecheck && npm run lint && npm test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

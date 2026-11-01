@@ -128,7 +128,6 @@ function Canvas({ graph }: { graph: GraphData }) {
       const selected = new Set(prev.filter((n) => n.selected).map((n) => n.id));
       return toNodes(graph).map((n) => ({ ...n, selected: selected.has(n.id) }));
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graph]);
   const edges: Edge[] = useMemo(
     () =>

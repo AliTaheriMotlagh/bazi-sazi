@@ -2,7 +2,7 @@
  * - Immutable files (hashed bundles, Starter Content, uploads) → cache-first.
  * - Pages → network-first, falling back to the cached copy when offline.
  * - API and WebSocket traffic is never cached. */
-const VERSION = 'bz-v2';
+const VERSION = 'bz-v3';
 const CORE = ['/', '/player.html', '/favicon.svg', '/manifest.webmanifest'];
 const IMMUTABLE = /^\/(assets|samples|templates|icons|files)\//;
 

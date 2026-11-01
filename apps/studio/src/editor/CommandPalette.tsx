@@ -93,8 +93,14 @@ export function CommandPalette() {
               setIndex(0);
             }}
             onKeyDown={(e) => {
-              if (e.key === 'ArrowDown') (e.preventDefault(), setIndex((i) => Math.min(results.length - 1, i + 1)));
-              if (e.key === 'ArrowUp') (e.preventDefault(), setIndex((i) => Math.max(0, i - 1)));
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setIndex((i) => Math.min(results.length - 1, i + 1));
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setIndex((i) => Math.max(0, i - 1));
+              }
               if (e.key === 'Enter') run(results[index]);
               if (e.key === 'Escape') close();
               e.stopPropagation();

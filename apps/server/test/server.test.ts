@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -143,5 +143,26 @@ describe('multiplayer', () => {
     await new Promise((r) => setTimeout(r, 80));
     expect(b.inbox.find((m) => m.t === 'host')).toMatchObject({ id: b.welcome.id });
     b.ws.close();
+  });
+});
+
+describe('game subdomains', () => {
+  it('serve the player for pages but real files for static paths', async () => {
+    const dataDir = mkdtempSync(path.join(tmpdir(), 'bazi-dist-'));
+    const dist = path.join(dataDir, 'dist');
+    mkdirSync(path.join(dist, 'samples'), { recursive: true });
+    writeFileSync(path.join(dist, 'index.html'), 'STUDIO');
+    writeFileSync(path.join(dist, 'player.html'), 'PLAYER');
+    writeFileSync(path.join(dist, 'sw.js'), 'SW');
+    writeFileSync(path.join(dist, 'samples', 'knight.txt'), 'KNIGHT');
+    const site = await buildApp({ config: { ...config, dataDir, studioDist: dist, baseDomain: 'localhost:8787' }, db: await openSqlite(dataDir, ':memory:') });
+    const get = (url: string, host = 'cool-game.localhost:8787') => site.inject({ method: 'GET', url, headers: { host } }).then((r) => r.body);
+    expect(await get('/')).toBe('PLAYER');
+    expect(await get('/level-2')).toBe('PLAYER');
+    expect(await get('/sw.js')).toBe('SW');
+    expect(await get('/samples/knight.txt')).toBe('KNIGHT');
+    expect(await get('/sw.jsx')).toBe('PLAYER');
+    expect(await get('/', 'localhost:8787')).toBe('STUDIO');
+    await site.close();
   });
 });

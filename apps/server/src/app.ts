@@ -15,8 +15,8 @@ import { authRoutes } from './routes/auth.ts';
 import { gameRoutes } from './routes/games.ts';
 import { projectRoutes } from './routes/projects.ts';
 
-/** Paths that are never rewritten to the game player on a game subdomain. */
-const PASSTHROUGH = /^\/(api|files|assets|ws)\//;
+/** Paths that are never rewritten to the game player on a game subdomain (keep in sync with PAGE in scripts/build-vercel.mjs). */
+const PASSTHROUGH = /^\/(?:(?:api|files|assets|ws|samples|templates|icons)\/|(?:favicon\.svg|manifest\.webmanifest|sw\.js)(?:[?#]|$))/;
 
 export function subdomainSlug(host: string | undefined, baseDomain: string): string | null {
   if (!host) return null;

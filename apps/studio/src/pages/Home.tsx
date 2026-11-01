@@ -139,8 +139,9 @@ export function HomePage() {
         <div className="grid">
           {TEMPLATES.map((t) => (
             <button key={t.id} className="card" onClick={() => startTemplate(t)} disabled={!!creating}>
-              <div className="card-thumb" style={{ background: `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})` }}>
-                {creating === t.id ? <Spinner size={28} /> : <Icon name={t.mode === '2d' ? 'Gamepad2' : t.tags.includes('VR') ? 'Glasses' : t.tags.includes('Multiplayer') ? 'Users' : 'Box'} size={34} />}
+              {/* Screenshot from public/templates (captured in play mode); the gradient shows while it loads. */}
+              <div className="card-thumb" style={{ backgroundImage: `url(/templates/${t.id}.jpg), linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})` }}>
+                {creating === t.id && <Spinner size={28} />}
               </div>
               <div className="card-body">
                 <div className="card-title">{t.name}</div>

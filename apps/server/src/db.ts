@@ -56,7 +56,6 @@ const MIGRATIONS = [
 
 type Value = string | number | null;
 // Rows are typed at the call site (`as UserRow`), like most SQL drivers.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = any;
 
 export interface Statement {

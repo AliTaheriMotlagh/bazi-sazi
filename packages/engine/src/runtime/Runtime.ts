@@ -1018,6 +1018,8 @@ export class Runtime {
   }
 
   private createApi(): GameApi {
+    // The API object's own methods have their own `this`; capture the runtime by name.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const rt = this;
     const hud: HudApi = {
       set: (k, t, s) => rt.hud?.set(k, t, s),

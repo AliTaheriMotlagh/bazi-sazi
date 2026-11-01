@@ -1,0 +1,6 @@
+dist
+.vercel
+data
+node_modules
+package-lock.json
+apps/studio/public
