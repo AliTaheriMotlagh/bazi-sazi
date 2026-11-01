@@ -1,6 +1,6 @@
 import MonacoEditor, { loader, type OnMount } from '@monaco-editor/react';
 import { compileScript, SCRIPT_API_DTS } from '@bazi/engine';
-import * as monaco from 'monaco-editor';
+import * as monaco from '../monacoSlim';
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker';
 import TsWorker from 'monaco-editor/language/typescript/ts.worker.js?worker';
 import { useEffect, useMemo, useRef } from 'react';

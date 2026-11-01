@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -21,6 +22,8 @@ function gameSubdomains(): Plugin {
 
 export default defineConfig({
   plugins: [react(), gameSubdomains()],
+  // Deep imports into Monaco's ESM build (see src/editor/monacoSlim.ts).
+  resolve: { alias: { '@monaco': fileURLToPath(new URL('../../node_modules/monaco-editor/esm/vs', import.meta.url)) } },
   server: {
     port: 5173,
     host: true,

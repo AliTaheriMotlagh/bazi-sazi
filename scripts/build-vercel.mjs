@@ -33,7 +33,7 @@ await build({
   format: 'esm',
   target: 'node22',
   minify: true,
-  sourcemap: 'linked',
+  sourcemap: false,
   legalComments: 'none',
   // CJS dependencies call require() for Node built-ins; give ESM a require.
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },

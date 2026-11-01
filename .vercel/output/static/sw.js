@@ -2,7 +2,7 @@
  * - Immutable files (hashed bundles, Starter Content, uploads) → cache-first.
  * - Pages → network-first, falling back to the cached copy when offline.
  * - API and WebSocket traffic is never cached. */
-const VERSION = 'bz-v3';
+const VERSION = 'bz-v4';
 const CORE = ['/', '/player.html', '/favicon.svg', '/manifest.webmanifest'];
 const IMMUTABLE = /^\/(assets|samples|templates|icons|files)\//;
 
@@ -30,9 +30,11 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(VERSION).then(async (cache) => {
         const hit = await cache.match(req);
-        if (hit) return hit;
+        // Never trust a cached HTML page standing in for a script/asset (a failed deploy can produce one).
+        if (hit && !(hit.headers.get('content-type') ?? '').includes('text/html')) return hit;
         const res = await fetch(req);
-        if (res.ok && res.type === 'basic') cache.put(req, res.clone());
+        const isHtml = (res.headers.get('content-type') ?? '').includes('text/html');
+        if (res.ok && res.type === 'basic' && !isHtml) cache.put(req, res.clone());
         return res;
       }),
     );
