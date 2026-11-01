@@ -64,27 +64,27 @@ export function gameRoutes(app: FastifyInstance, { db }: AppContext): void {
     }
     if (multiplayer === '1') where.push('g.multiplayer = 1');
     const sql = `SELECT ${LIST_COLUMNS} FROM games g JOIN users u ON u.id = g.owner_id ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY ${SORTS[sort] ?? SORTS.popular} LIMIT ? OFFSET ?`;
-    const rows = db.prepare(sql).all(...args, limit, offset) as unknown as GameRow[];
+    const rows = await db.prepare(sql).all(...args, limit, offset) as unknown as GameRow[];
     return { games: rows.map(toDto) };
   });
 
   app.get('/api/games/mine', async (req, reply) => {
     const me = requireUser(req, reply);
     if (!me) return;
-    const rows = db.prepare(`SELECT ${LIST_COLUMNS} FROM games g JOIN users u ON u.id = g.owner_id WHERE g.owner_id = ? ORDER BY g.updated_at DESC`).all(me.sub) as unknown as GameRow[];
+    const rows = await db.prepare(`SELECT ${LIST_COLUMNS} FROM games g JOIN users u ON u.id = g.owner_id WHERE g.owner_id = ? ORDER BY g.updated_at DESC`).all(me.sub) as unknown as GameRow[];
     return { games: rows.map(toDto) };
   });
 
   app.get<{ Params: { slug: string } }>('/api/games/:slug', async (req, reply) => {
-    const row = db.prepare(`SELECT ${LIST_COLUMNS} FROM games g JOIN users u ON u.id = g.owner_id WHERE g.slug = ?`).get(req.params.slug) as GameRow | undefined;
+    const row = await db.prepare(`SELECT ${LIST_COLUMNS} FROM games g JOIN users u ON u.id = g.owner_id WHERE g.slug = ?`).get(req.params.slug) as GameRow | undefined;
     if (!row) return reply.code(404).send({ error: 'Game not found.' });
-    const liked = req.user ? !!db.prepare('SELECT 1 FROM likes WHERE user_id = ? AND game_id = ?').get(req.user.sub, row.id) : false;
+    const liked = req.user ? !!await db.prepare('SELECT 1 FROM likes WHERE user_id = ? AND game_id = ?').get(req.user.sub, row.id) : false;
     return { game: { ...toDto(row), liked } };
   });
 
   /** The published project snapshot the player runs. */
   app.get<{ Params: { slug: string } }>('/api/games/:slug/data', async (req, reply) => {
-    const row = db.prepare('SELECT data, updated_at FROM games WHERE slug = ?').get(req.params.slug) as { data: string; updated_at: number } | undefined;
+    const row = await db.prepare('SELECT data, updated_at FROM games WHERE slug = ?').get(req.params.slug) as { data: string; updated_at: number } | undefined;
     if (!row) return reply.code(404).send({ error: 'Game not found.' });
     const etag = `"${row.updated_at}"`;
     if (req.headers['if-none-match'] === etag) return reply.code(304).send();
@@ -98,19 +98,19 @@ export function gameRoutes(app: FastifyInstance, { db }: AppContext): void {
   });
 
   app.post<{ Params: { slug: string } }>('/api/games/:slug/play', async (req) => {
-    if (playLimiter.take(`${req.ip}:${req.params.slug}`)) db.prepare('UPDATE games SET plays = plays + 1 WHERE slug = ?').run(req.params.slug);
+    if (playLimiter.take(`${req.ip}:${req.params.slug}`)) await db.prepare('UPDATE games SET plays = plays + 1 WHERE slug = ?').run(req.params.slug);
     return { ok: true };
   });
 
   app.post<{ Params: { slug: string } }>('/api/games/:slug/like', async (req, reply) => {
     const me = requireUser(req, reply);
     if (!me) return;
-    const game = db.prepare('SELECT id FROM games WHERE slug = ?').get(req.params.slug) as { id: string } | undefined;
+    const game = await db.prepare('SELECT id FROM games WHERE slug = ?').get(req.params.slug) as { id: string } | undefined;
     if (!game) return reply.code(404).send({ error: 'Game not found.' });
-    const had = db.prepare('DELETE FROM likes WHERE user_id = ? AND game_id = ?').run(me.sub, game.id).changes > 0;
-    if (!had) db.prepare('INSERT INTO likes (user_id, game_id) VALUES (?, ?)').run(me.sub, game.id);
-    db.prepare('UPDATE games SET likes = (SELECT COUNT(*) FROM likes WHERE game_id = ?) WHERE id = ?').run(game.id, game.id);
-    const { likes } = db.prepare('SELECT likes FROM games WHERE id = ?').get(game.id) as { likes: number };
+    const had = (await db.prepare('DELETE FROM likes WHERE user_id = ? AND game_id = ?').run(me.sub, game.id)).changes > 0;
+    if (!had) await db.prepare('INSERT INTO likes (user_id, game_id) VALUES (?, ?)').run(me.sub, game.id);
+    await db.prepare('UPDATE games SET likes = (SELECT COUNT(*) FROM likes WHERE game_id = ?) WHERE id = ?').run(game.id, game.id);
+    const { likes } = await db.prepare('SELECT likes FROM games WHERE id = ?').get(game.id) as { likes: number };
     return { liked: !had, likes };
   });
 }

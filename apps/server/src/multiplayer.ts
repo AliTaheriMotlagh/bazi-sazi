@@ -40,7 +40,7 @@ export function multiplayer(app: FastifyInstance, { db, config }: AppContext): {
     for (const p of room.players.values()) if (p.id !== except && p.socket.readyState === 1) p.socket.send(raw);
   };
 
-  app.get<{ Querystring: { game?: string; room?: string; name?: string } }>('/ws/play', { websocket: true }, (socket, req) => {
+  app.get<{ Querystring: { game?: string; room?: string; name?: string } }>('/ws/play', { websocket: true }, async (socket, req) => {
     const game = String(req.query.game ?? '');
     const roomName = String(req.query.room ?? 'public');
     const name = String(req.query.name ?? 'Player').replace(/[^\p{L}\p{N} _.-]/gu, '').slice(0, 24) || 'Player';
@@ -50,13 +50,14 @@ export function multiplayer(app: FastifyInstance, { db, config }: AppContext): {
     }
     let maxPlayers = 16;
     if (!game.startsWith('test:')) {
-      const row = db.prepare('SELECT multiplayer, max_players FROM games WHERE slug = ?').get(game) as { multiplayer: number; max_players: number } | undefined;
+      const row = await db.prepare('SELECT multiplayer, max_players FROM games WHERE slug = ?').get(game) as { multiplayer: number; max_players: number } | undefined;
       if (!row || !row.multiplayer) {
         socket.send(JSON.stringify({ t: 'error', message: 'This game is not multiplayer.' }));
         return socket.close(1008);
       }
       maxPlayers = row.max_players;
     }
+    if (socket.readyState !== 1) return; // closed while we were checking the game
     const key = `${game}/${roomName}`;
     let room = rooms.get(key);
     if (!room) rooms.set(key, (room = { key, players: new Map(), state: {}, hostId: null, maxPlayers }));

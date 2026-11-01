@@ -60,7 +60,11 @@ interface GameObject {
   getComponent(type: string): Record<string, any> | undefined;
   setColor(color: string): this;
   setText(text: string): this;
+  /** Cross-fade to a model animation clip by (partial) name: 'Walk', 'Attack'… */
   playAnimation(name: string): this;
+  /** Walk to a point with pathfinding (needs a Nav Agent component). */
+  moveTo(x: number, y: number, z?: number): this;
+  stop(): this;
   /** Calls onMessage(name, data, from) on this entity's scripts. */
   send(message: string, data?: any, from?: GameObject | null): void;
   destroy(): void;
@@ -72,7 +76,11 @@ interface SpawnOptions {
   velocity?: [number, number, number];
   parent?: GameObject | null;
   name?: string;
+  /** Team for Unit AI components inside the prefab. */
+  team?: 'blue' | 'red' | 'green' | 'yellow';
 }
+
+type Easing = 'linear' | 'inQuad' | 'outQuad' | 'inOutQuad' | 'inOutSine' | 'outCubic' | 'outBack' | 'outElastic' | 'outBounce';
 
 interface Game {
   /** Game-wide variables. Show them in HUD/World Text with {name}. */
@@ -103,6 +111,19 @@ interface Game {
   raycast(origin: Vector3, direction: Vector3, maxDistance?: number, exclude?: GameObject): { entity: GameObject; point: Vector3; distance: number } | null;
   /** Pointer/touch position projected into the world (z=0 plane in 2D, ground in 3D). */
   pointerWorld(): Vector3;
+  /** Grid pathfinding around static obstacles. Returns waypoints or null. */
+  findPath(from: Vector3, to: Vector3): Vector3[] | null;
+  /** Closest live entity with a tag. */
+  findNearest(tag: string, from: Vector3, maxDistance?: number): GameObject | undefined;
+  /** Animate numbers: game.tween(self.scale, { x: 2, y: 2, z: 2 }, 0.3, { ease: 'outBack', yoyo: true }). Returns cancel(). */
+  tween(target: object, to: Record<string, number>, seconds: number, options?: { ease?: Easing; delay?: number; yoyo?: boolean; repeat?: number; onComplete?: () => void }): () => void;
+  /** Game-feel effects. */
+  readonly fx: {
+    shake(strength?: number, seconds?: number): void;
+    popText(position: Vector3, text: string, color?: string, size?: number): void;
+    burst(position: Vector3, color?: string, count?: number, speed?: number): void;
+    flash(entity: GameObject, color?: string, seconds?: number): void;
+  };
   /** Run once after some seconds. Returns a cancel function. */
   after(seconds: number, fn: () => void): () => void;
   /** Run repeatedly. Returns a cancel function. */

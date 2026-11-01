@@ -298,6 +298,32 @@ export const NODES: NodeDef[] = [
     else n.entity('target')?.send(msg, data, n.self);
   }, { fields: [str('toTag', 'Or: all with tag')] }),
 
+  action('action.moveTo', 'Move To (Pathfinding)', 'Walk around obstacles to a point (needs Nav Agent).', [ent(), ...xyz()], (n) => {
+    n.entity('target')?.moveTo(n.in<number>('x'), n.in<number>('y'), n.in<number>('z'));
+  }),
+  action('action.punch', 'Punch Scale', 'Juicy squash & stretch bounce.', [ent(), num('amount', 'Amount', 0.3)], (n) => {
+    const e = n.entity('target');
+    if (!e) return;
+    const s = e.scale.clone();
+    const k = 1 + n.in<number>('amount');
+    n.api.tween(e.scale, { x: s.x * k, y: s.y * k, z: s.z * k }, 0.12, { yoyo: true, ease: 'outQuad' });
+  }),
+  action('action.animateMove', 'Animate Move', 'Smoothly move to a position over time.', [ent(), ...xyz(), num('seconds', 'Seconds', 0.5)], (n) => {
+    const e = n.entity('target');
+    if (e) n.api.tween(e.position, { x: n.in<number>('x'), y: n.in<number>('y'), z: n.in<number>('z') }, n.in<number>('seconds'), { ease: (n.field<string>('ease') as 'outQuad') ?? 'outQuad' });
+  }, { fields: [sel('ease', 'Easing', ['outQuad', 'inOutSine', 'outBack', 'outBounce', 'outElastic', 'linear'])] }),
+  action('fx.shake', 'Camera Shake', 'Shake the screen.', [num('strength', 'Strength', 0.3), num('seconds', 'Seconds', 0.3)], (n) => {
+    n.api.fx.shake(n.in<number>('strength'), n.in<number>('seconds'));
+  }, { category: 'Scene' }),
+  action('fx.popText', 'Floating Text', 'Text that floats up from an entity (+10, -3, Critical!).', [ent(), any('text', 'Text', '+1'), str('color', 'Color', '#ffd166')], (n) => {
+    const e = n.entity('target');
+    if (e) n.api.fx.popText(e.worldPosition(), String(n.in('text')), n.in<string>('color'));
+  }, { category: 'Scene' }),
+  action('fx.burst', 'Particle Burst', 'One-shot explosion of particles.', [ent(), str('color', 'Color', '#ffd166'), num('count', 'Count', 40)], (n) => {
+    const e = n.entity('target');
+    if (e) n.api.fx.burst(e.worldPosition(), n.in<string>('color'), n.in<number>('count'));
+  }, { category: 'Scene' }),
+
   // ───────────── Variables
   action('var.set', 'Set Variable', 'Store a value (game-wide or on this entity).', [any('value', 'Value', 0)], (n) => {
     scopeVars(n)[n.field<string>('name')] = n.in('value');
@@ -369,6 +395,11 @@ export const NODES: NodeDef[] = [
     result: !!n.entity('target')?.hasTag(n.in<string>('tag')),
   })),
   pure('data.grounded', 'Is On Ground', 'Entity', 'Standing on something?', [ent()], [bool('grounded', 'Grounded')], (n) => ({ grounded: !!n.entity('target')?.isGrounded() })),
+  pure('data.nearest', 'Nearest With Tag', 'Entity', 'Closest entity with a tag.', [ent('from', 'From'), str('tag', 'Tag', 'enemy')], [ent('entity', 'Entity'), bool('found', 'Found'), num('distance', 'Distance')], (n) => {
+    const from = n.entity('from');
+    const e = from ? n.api.findNearest(n.in<string>('tag'), from.worldPosition()) : undefined;
+    return { entity: e, found: !!e, distance: e && from ? e.distanceTo(from) : 0 };
+  }),
   pure('data.count', 'Count With Tag', 'Entity', 'How many entities have a tag.', [str('tag', 'Tag', 'enemy')], [num('count', 'Count')], (n) => ({ count: n.api.findAll(n.in<string>('tag')).length })),
 
   // ───────────── Values & math

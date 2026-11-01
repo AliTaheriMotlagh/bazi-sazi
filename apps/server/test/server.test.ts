@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildApp, subdomainSlug } from '../src/app.ts';
 import { config } from '../src/config.ts';
-import { openDb } from '../src/db.ts';
+import { openSqlite } from '../src/db.ts';
 
 const project = (name = 'Test Game', multiplayer = false) => ({
   format: 'bazi-sazi',
@@ -23,7 +23,7 @@ const auth = () => ({ authorization: `Bearer ${token}` });
 
 beforeAll(async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'bazi-test-'));
-  app = await buildApp({ config: { ...config, dataDir, studioDist: path.join(dataDir, 'none') }, db: openDb(dataDir, ':memory:') });
+  app = await buildApp({ config: { ...config, dataDir, studioDist: path.join(dataDir, 'none') }, db: await openSqlite(dataDir, ':memory:') });
   await app.ready();
 });
 afterAll(() => app.close());

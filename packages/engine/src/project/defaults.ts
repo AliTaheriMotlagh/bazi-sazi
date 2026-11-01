@@ -2,6 +2,7 @@ import { createComponent } from '../components/registry';
 import type {
   ComponentData,
   EntityData,
+  EnvironmentData,
   GameMode,
   GraphData,
   InputMap,
@@ -32,14 +33,20 @@ export function defaultSettings(mode: GameMode, startScene: string): ProjectSett
     gravity: mode === '2d' ? [0, -30, 0] : [0, -9.81, 0],
     startScene,
     graphics: {
+      quality: 'auto',
       shadows: mode === '3d',
       antialias: true,
       toneMapping: mode === '3d',
+      exposure: 1,
       bloom: false,
       bloomStrength: 0.6,
+      ssao: false,
+      vignette: mode === '3d' ? 0.25 : 0,
       pixelArt: false,
       maxPixelRatio: 2,
+      adaptiveResolution: true,
     },
+    navigation: { cellSize: 0.5 },
     physics: { enabled: true, debug: false, fixedTimestep: 1 / 60 },
     multiplayer: { enabled: false, maxPlayers: 8, tickRate: 15, playerPrefab: '' },
     xr: { enabled: false },
@@ -104,12 +111,22 @@ export function createScene(name: string, mode: GameMode, withDefaults = true): 
     id: uid('s_'),
     name,
     entities,
-    environment: {
-      ambientColor: '#ffffff',
-      ambientIntensity: mode === '2d' ? 1 : 0.3,
-      fogColor: '#c8d8ec',
-      fogDensity: 0,
-    },
+    environment: defaultEnvironment(mode),
+  };
+}
+
+export function defaultEnvironment(mode: GameMode): EnvironmentData {
+  return {
+    ambientColor: '#ffffff',
+    ambientIntensity: mode === '2d' ? 1 : 0.15,
+    fogColor: '#c8d8ec',
+    fogDensity: 0,
+    sky: mode === '2d' ? 'color' : 'procedural',
+    skyTop: '#3a7bd5',
+    skyBottom: '#cfe8ff',
+    sunElevation: 35,
+    envLight: mode === '2d' ? 'none' : 'sky',
+    envIntensity: 0.8,
   };
 }
 

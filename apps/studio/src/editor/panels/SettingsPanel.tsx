@@ -129,6 +129,36 @@ export function SettingsPanel() {
           <Row label="Ambient light"><NumberInput value={scene.environment.ambientIntensity} min={0} step={0.05} onChange={(v) => updateScene((sc) => void (sc.environment.ambientIntensity = v), 'Ambient', 'amb-i')} /></Row>
           <Row label="Fog color"><ColorInput value={scene.environment.fogColor} onChange={(v) => updateScene((sc) => void (sc.environment.fogColor = v), 'Fog', 'fog-c')} /></Row>
           <Row label="Fog density" help="0 = no fog"><NumberInput value={scene.environment.fogDensity} min={0} max={0.5} step={0.005} onChange={(v) => updateScene((sc) => void (sc.environment.fogDensity = v), 'Fog', 'fog-d')} /></Row>
+          <Row label="Sky">
+            <select className="select" value={scene.environment.sky} onChange={(e) => updateScene((sc) => void (sc.environment.sky = e.target.value as 'color'), 'Sky')}>
+              <option value="color">Flat color</option>
+              <option value="gradient">Gradient</option>
+              {s.mode === '3d' && <option value="procedural">Realistic sky (sun)</option>}
+            </select>
+          </Row>
+          {scene.environment.sky === 'gradient' && (
+            <>
+              <Row label="Sky top"><ColorInput value={scene.environment.skyTop} onChange={(v) => updateScene((sc) => void (sc.environment.skyTop = v), 'Sky', 'sky-t')} /></Row>
+              <Row label="Sky bottom"><ColorInput value={scene.environment.skyBottom} onChange={(v) => updateScene((sc) => void (sc.environment.skyBottom = v), 'Sky', 'sky-b')} /></Row>
+            </>
+          )}
+          {scene.environment.sky === 'procedural' && (
+            <Row label="Sun height °"><NumberInput value={scene.environment.sunElevation} min={-5} max={90} step={1} onChange={(v) => updateScene((sc) => void (sc.environment.sunElevation = v), 'Sun', 'sun')} /></Row>
+          )}
+          {s.mode === '3d' && (
+            <>
+              <Row label="Reflections & light" help="Image-based lighting makes materials look real">
+                <select className="select" value={scene.environment.envLight} onChange={(e) => updateScene((sc) => void (sc.environment.envLight = e.target.value as 'sky'), 'Environment light')}>
+                  <option value="none">Off</option>
+                  <option value="sky">From the sky</option>
+                  <option value="studio">Studio</option>
+                </select>
+              </Row>
+              {scene.environment.envLight !== 'none' && (
+                <Row label="Env. strength"><NumberInput value={scene.environment.envIntensity} min={0} max={4} step={0.05} onChange={(v) => updateScene((sc) => void (sc.environment.envIntensity = v), 'Environment light', 'env-i')} /></Row>
+              )}
+            </>
+          )}
         </Section>
       )}
 
@@ -140,6 +170,18 @@ export function SettingsPanel() {
       </Section>
 
       <Section title="Graphics" icon="Sparkles" open={false}>
+        <Row label="Quality" help="Auto = high on computers, low on phones">
+          <select className="select" value={g.quality} onChange={(e) => updateSettings((st) => void (st.graphics = { ...st.graphics, quality: e.target.value as 'auto' }), 'Quality')}>
+            <option value="auto">Auto</option>
+            <option value="low">Low (fast)</option>
+            <option value="medium">Medium</option>
+            <option value="high">High (beautiful)</option>
+          </select>
+        </Row>
+        <Row label="Ambient occlusion" help="Soft contact shadows (3D, high quality)"><Switch checked={g.ssao} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, ssao: v }), 'Ambient occlusion')} /></Row>
+        <Row label="Vignette"><NumberInput value={g.vignette} min={0} max={1} step={0.05} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, vignette: v }), 'Vignette', 'vignette')} /></Row>
+        <Row label="Exposure"><NumberInput value={g.exposure} min={0.1} max={4} step={0.05} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, exposure: v }), 'Exposure', 'exposure')} /></Row>
+        <Row label="Auto resolution" help="Keeps the frame rate smooth on slow devices"><Switch checked={g.adaptiveResolution} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, adaptiveResolution: v }), 'Adaptive resolution')} /></Row>
         <Row label="Shadows"><Switch checked={g.shadows} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, shadows: v }), 'Shadows')} /></Row>
         <Row label="Glow (bloom)"><Switch checked={g.bloom} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, bloom: v }), 'Bloom')} /></Row>
         {g.bloom && <Row label="Glow strength"><NumberInput value={g.bloomStrength} min={0} max={3} step={0.05} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, bloomStrength: v }), 'Bloom', 'bloom-s')} /></Row>}
@@ -147,6 +189,10 @@ export function SettingsPanel() {
         <Row label="Anti-aliasing"><Switch checked={g.antialias} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, antialias: v }), 'Antialias')} /></Row>
         <Row label="Pixel art" help="Crisp, unfiltered textures"><Switch checked={g.pixelArt} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, pixelArt: v }), 'Pixel art')} /></Row>
         <Row label="Max resolution" help="Lower = faster on phones"><NumberInput value={g.maxPixelRatio} min={0.5} max={3} step={0.25} onChange={(v) => updateSettings((st) => void (st.graphics = { ...st.graphics, maxPixelRatio: v }), 'Resolution', 'dpr')} /></Row>
+      </Section>
+
+      <Section title="Navigation (pathfinding)" icon="Waypoints" open={false}>
+        <Row label="Grid cell size" help="Smaller = more precise paths, slower"><NumberInput value={s.navigation.cellSize} min={0.1} max={4} step={0.1} onChange={(v) => updateSettings((st) => void (st.navigation = { ...st.navigation, cellSize: v }), 'Nav cell size', 'nav')} /></Row>
       </Section>
 
       <Section title="Multiplayer" icon="Users" open={s.multiplayer.enabled}>

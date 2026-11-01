@@ -94,6 +94,13 @@ export function validateProject(project: ProjectData): Problem[] {
       out.push({ severity: 'error', message: `${name}: ${c.type} needs an existing prefab.`, ...at });
     if (c.type === 'Goal' && c.scene && !sceneRefs.has(String(c.scene)) && !sceneRefs.has(String(c.scene).toLowerCase()))
       out.push({ severity: 'error', message: `${name}: Goal points to a missing scene.`, ...at });
+    if (c.type === 'SpawnMenu') {
+      for (const line of String(c.items ?? '').split('\n')) {
+        const ref = line.split(':')[0]?.trim();
+        if (ref && !hasPrefab(ref)) out.push({ severity: 'error', message: `${name}: card "${ref}" uses a missing prefab.`, ...at });
+      }
+    }
+    if (c.type === 'RouteBuilder' && !hasPrefab(String(c.vehicle ?? ''))) out.push({ severity: 'warning', message: `${name}: Route Builder has no vehicle prefab, so no trains will run.`, ...at });
     if (c.type === 'TileMap') {
       for (const line of String(c.legend ?? '').split('\n')) {
         const idx = line.indexOf('=');

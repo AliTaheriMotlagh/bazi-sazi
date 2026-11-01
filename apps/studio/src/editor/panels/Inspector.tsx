@@ -132,6 +132,7 @@ function EntityInspector({ entity }: { entity: EntityData }) {
     <div className="inspector">
       <div className="insp-head">
         <div className="row">
+          <span className="details-icon"><Icon name={getComponentSchema(entity.components[0]?.type ?? '')?.icon ?? 'Box'} size={16} /></span>
           <Switch checked={entity.enabled} onChange={(v) => updateEntity(entity.id, (e) => void (e.enabled = v), 'Toggle enabled')} label="Enabled" />
           <input className="input grow" value={entity.name} onChange={(e) => updateEntity(entity.id, (x) => void (x.name = e.target.value), 'Rename', `name:${entity.id}`)} aria-label="Name" style={{ fontWeight: 600 }} />
           <button
@@ -167,7 +168,7 @@ function EntityInspector({ entity }: { entity: EntityData }) {
         <ComponentCard key={`${entity.id}:${i}:${c.type}`} entity={entity} component={c} index={i} />
       ))}
       <div style={{ padding: 12 }}>
-        <button className="btn primary" style={{ width: '100%' }} onClick={(e) => menu.open(e.currentTarget.getBoundingClientRect(), addComponentItems(entity), true)}>
+        <button className="btn primary details-add" style={{ width: '100%' }} onClick={(e) => menu.open(e.currentTarget.getBoundingClientRect(), addComponentItems(entity), true)}>
           <Icon name="Plus" size={15} /> Add component
         </button>
       </div>

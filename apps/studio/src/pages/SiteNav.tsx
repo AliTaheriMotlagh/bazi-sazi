@@ -73,6 +73,7 @@ export function SiteNav() {
       <div className="nav-links">
         <NavLink to="/" end>Create</NavLink>
         <NavLink to="/explore">Play games</NavLink>
+        <NavLink to="/learn">Learn</NavLink>
       </div>
       <div className="spacer" />
       <button className="btn ghost icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme">

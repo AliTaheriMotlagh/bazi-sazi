@@ -1,6 +1,6 @@
 import { Runtime } from '@bazi/engine';
 import { useEffect, useRef, useState } from 'react';
-import { wsUrl } from '../../api/client';
+import { networkFor } from '../../api/client';
 import { useAuth } from '../../store/auth';
 import { logToConsole, useConsole } from '../../store/console';
 import { editor, useEditor } from '../../store/editor';
@@ -19,6 +19,7 @@ export function GameView() {
   const [fps, setFps] = useState(0);
   const paused = useEditor((s) => s.playState === 'paused');
   const physicsDebug = useSession((s) => s.physicsDebug);
+  const device = useEditor((s) => s.device);
   const timeScale = useSession((s) => s.timeScale);
 
   useEffect(() => {
@@ -29,15 +30,19 @@ export function GameView() {
     useConsole.getState().clear();
     logToConsole({ level: 'info', message: `▶ Playing "${project.scenes.find((s) => s.id === sceneId)?.name}"`, source: 'Editor' });
     const user = useAuth.getState().user;
-    void Runtime.create({
-      canvas: canvas.current,
-      overlay: overlay.current!,
-      project: structuredClone(project),
-      mode: 'play',
-      sceneId,
-      logger: logToConsole,
-      network: project.settings.multiplayer.enabled ? { url: wsUrl(`test:${projectId}`), name: user?.username ?? 'Tester' } : null,
-    })
+    const network = project.settings.multiplayer.enabled ? networkFor(`test:${projectId}`, 'public', user?.username ?? 'Tester') : Promise.resolve(null);
+    void network
+      .then((net) =>
+        Runtime.create({
+          canvas: canvas.current!,
+          overlay: overlay.current!,
+          project: structuredClone(project),
+          mode: 'play',
+          sceneId,
+          logger: logToConsole,
+          network: net,
+        }),
+      )
       .then((rt) => {
         if (disposed) return rt.dispose();
         runtime = rt;
@@ -73,9 +78,11 @@ export function GameView() {
   }, [runtime, timeScale]);
 
   return (
-    <div className="viewport">
-      <canvas ref={canvas} tabIndex={0} aria-label="Game view" />
-      <div ref={overlay} className="game-overlay" />
+    <div className={`viewport game-stage device-${device}`}>
+      <div className="device-frame">
+        <canvas ref={canvas} tabIndex={0} aria-label="Game view" />
+        <div ref={overlay} className="game-overlay" />
+      </div>
       <div className="viewport-overlay bottom" style={{ zIndex: 8 }}>
         <span className="chip" style={{ background: 'rgba(52, 211, 153, .85)', color: '#052e1f' }}>
           <Icon name={paused ? 'Pause' : 'Play'} size={13} /> {paused ? 'Paused' : 'Playing'}

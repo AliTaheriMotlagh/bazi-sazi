@@ -3,19 +3,33 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Bazi-Sazi — a web-native game engine studio: build, play, publish and share 2D/3D/VR multiplayer games in the browser.",
-  "workspaces": ["packages/*", "apps/*"],
-  "engines": { "node": ">=22.13" },
+  "description": "Bazi-Sazi \u2014 a web-native game engine studio: build, play, publish and share 2D/3D/VR multiplayer games in the browser.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "dev": "concurrently -k -n server,studio -c blue,magenta \"npm run dev -w @bazi/server\" \"npm run dev -w @bazi/studio\"",
     "build": "npm run build -w @bazi/studio",
     "start": "npm run start -w @bazi/server",
     "typecheck": "tsc -p packages/engine --noEmit && tsc -p apps/studio --noEmit && tsc -p apps/server --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "samples": "node scripts/generate-samples.mjs",
+    "build:vercel": "node scripts/build-vercel.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "concurrently": "^10.0.6",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
     "vitest": "^5.0.5"
   }
 }

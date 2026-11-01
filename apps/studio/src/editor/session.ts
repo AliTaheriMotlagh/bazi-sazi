@@ -29,8 +29,29 @@ export const viewportBridge: {
   capture: () => string | null;
   focusSelection: () => void;
   dropPosition: (clientX: number, clientY: number) => [number, number, number];
+  /** True while the fly camera has the keyboard (editor shortcuts pause). */
+  flying: boolean;
 } = {
+  flying: false,
   capture: () => null,
   focusSelection: () => {},
   dropPosition: () => [0, 0, 0],
+};
+
+/**
+ * Callbacks owned by the editor page (save, dialogs) that actions need.
+ * The page registers real implementations on mount.
+ */
+export const editorHost: {
+  save: (withThumbnail?: boolean) => Promise<boolean>;
+  openPublish: () => void;
+  openShortcuts: () => void;
+  openWelcome: () => void;
+  uploadFiles: () => void;
+} = {
+  save: async () => false,
+  openPublish: () => {},
+  openShortcuts: () => {},
+  openWelcome: () => {},
+  uploadFiles: () => {},
 };

@@ -32,9 +32,9 @@ export function authRoutes(app: FastifyInstance, { db, config }: AppContext): vo
     if (!limiter.take(`reg:${req.ip}`)) return reply.code(429).send({ error: 'Too many attempts, try again later.' });
     const body = parse(Credentials, req.body, reply);
     if (!body) return;
-    if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(body.username)) return reply.code(409).send({ error: 'That username is taken.' });
+    if (await db.prepare('SELECT 1 FROM users WHERE username = ?').get(body.username)) return reply.code(409).send({ error: 'That username is taken.' });
     const user = { id: id('u_'), username: body.username, is_guest: 0 };
-    db.prepare('INSERT INTO users (id, username, password_hash, is_guest, created_at) VALUES (?, ?, ?, 0, ?)').run(user.id, user.username, await hashPassword(body.password), Date.now());
+    await db.prepare('INSERT INTO users (id, username, password_hash, is_guest, created_at) VALUES (?, ?, ?, 0, ?)').run(user.id, user.username, await hashPassword(body.password), Date.now());
     return issue(user);
   });
 
@@ -42,7 +42,7 @@ export function authRoutes(app: FastifyInstance, { db, config }: AppContext): vo
     if (!limiter.take(`login:${req.ip}`)) return reply.code(429).send({ error: 'Too many attempts, try again later.' });
     const body = parse(Credentials, req.body, reply);
     if (!body) return;
-    const row = db.prepare('SELECT * FROM users WHERE username = ?').get(body.username) as UserRow | undefined;
+    const row = await db.prepare('SELECT * FROM users WHERE username = ?').get(body.username) as UserRow | undefined;
     if (!row || row.is_guest || !(await verifyPassword(body.password, row.password_hash))) return reply.code(401).send({ error: 'Wrong username or password.' });
     return issue(row);
   });
@@ -51,7 +51,7 @@ export function authRoutes(app: FastifyInstance, { db, config }: AppContext): vo
   app.post('/api/auth/guest', async (req, reply) => {
     if (!limiter.take(`guest:${req.ip}`)) return reply.code(429).send({ error: 'Too many guest accounts, try again later.' });
     const user = { id: id('u_'), username: `guest-${id().slice(0, 6).toLowerCase().replace(/[^a-z0-9]/g, 'x')}`, is_guest: 1 };
-    db.prepare('INSERT INTO users (id, username, password_hash, is_guest, created_at) VALUES (?, ?, ?, 1, ?)').run(user.id, user.username, await hashPassword(id()), Date.now());
+    await db.prepare('INSERT INTO users (id, username, password_hash, is_guest, created_at) VALUES (?, ?, ?, 1, ?)').run(user.id, user.username, await hashPassword(id()), Date.now());
     return issue(user);
   });
 
@@ -61,16 +61,16 @@ export function authRoutes(app: FastifyInstance, { db, config }: AppContext): vo
     if (!me) return;
     const body = parse(Credentials, req.body, reply);
     if (!body) return;
-    const taken = db.prepare('SELECT id FROM users WHERE username = ?').get(body.username) as { id: string } | undefined;
+    const taken = await db.prepare('SELECT id FROM users WHERE username = ?').get(body.username) as { id: string } | undefined;
     if (taken && taken.id !== me.sub) return reply.code(409).send({ error: 'That username is taken.' });
-    db.prepare('UPDATE users SET username = ?, password_hash = ?, is_guest = 0 WHERE id = ?').run(body.username, await hashPassword(body.password), me.sub);
+    await db.prepare('UPDATE users SET username = ?, password_hash = ?, is_guest = 0 WHERE id = ?').run(body.username, await hashPassword(body.password), me.sub);
     return issue({ id: me.sub, username: body.username, is_guest: 0 });
   });
 
   app.get('/api/auth/me', async (req, reply) => {
     const me = requireUser(req, reply);
     if (!me) return;
-    const row = db.prepare('SELECT id, username, is_guest FROM users WHERE id = ?').get(me.sub) as UserRow | undefined;
+    const row = await db.prepare('SELECT id, username, is_guest FROM users WHERE id = ?').get(me.sub) as UserRow | undefined;
     if (!row) return reply.code(401).send({ error: 'Account no longer exists.' });
     return { user: { id: row.id, username: row.username, guest: !!row.is_guest } };
   });

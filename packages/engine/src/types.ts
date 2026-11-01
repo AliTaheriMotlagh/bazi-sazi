@@ -33,12 +33,24 @@ export interface EntityData {
   components: ComponentData[];
 }
 
+export type SkyMode = 'color' | 'gradient' | 'procedural';
+export type EnvLight = 'none' | 'studio' | 'sky';
+
 export interface EnvironmentData {
   ambientColor: string;
   ambientIntensity: number;
   fogColor: string;
   /** 0 disables fog. */
   fogDensity: number;
+  /** Background: flat project color, a two-color gradient, or a physically based sky (3D). */
+  sky: SkyMode;
+  skyTop: string;
+  skyBottom: string;
+  /** Sun height in degrees for the procedural sky. */
+  sunElevation: number;
+  /** Image-based lighting: realistic reflections and soft light from the environment. */
+  envLight: EnvLight;
+  envIntensity: number;
 }
 
 export interface SceneData {
@@ -48,7 +60,7 @@ export interface SceneData {
   environment: EnvironmentData;
 }
 
-export type AssetType = 'image' | 'audio' | 'model' | 'font' | 'other';
+export type AssetType = 'image' | 'audio' | 'model' | 'video' | 'font' | 'other';
 
 export interface AssetData {
   id: string;
@@ -105,13 +117,26 @@ export interface ProjectSettings {
   gravity: Vec3;
   startScene: string;
   graphics: {
+    /** auto = high on desktop, low on phones. */
+    quality: 'auto' | 'low' | 'medium' | 'high';
     shadows: boolean;
     antialias: boolean;
     toneMapping: boolean;
+    exposure: number;
     bloom: boolean;
     bloomStrength: number;
+    /** Ambient occlusion (contact shadows). 3D only, high quality only. */
+    ssao: boolean;
+    /** 0..1 darkening of the screen edges. */
+    vignette: number;
     pixelArt: boolean;
     maxPixelRatio: number;
+    /** Lower the render resolution automatically when the frame rate drops. */
+    adaptiveResolution: boolean;
+  };
+  navigation: {
+    /** Size of one pathfinding grid cell in world units. */
+    cellSize: number;
   };
   physics: {
     enabled: boolean;

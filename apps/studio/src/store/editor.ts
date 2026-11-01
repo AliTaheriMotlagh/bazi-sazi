@@ -6,8 +6,32 @@ enablePatches();
 
 export type GizmoTool = 'translate' | 'rotate' | 'scale';
 export type PlayState = 'edit' | 'playing' | 'paused';
-export type BottomTab = 'console' | 'problems' | 'code' | 'logic' | 'profiler';
+export type BottomTab = 'content' | 'console' | 'problems' | 'profiler';
 export type RightTab = 'inspector' | 'ai' | 'settings';
+/** Center document tabs (like Unreal's asset editors): the scene, the running game, scripts and graphs. */
+export type DocKey = 'scene' | 'game' | `script:${string}` | `graph:${string}`;
+export interface ViewportOptions {
+  view: 'perspective' | 'top' | 'front' | 'right';
+  shading: 'lit' | 'clay' | 'wireframe';
+  grid: boolean;
+  gizmos: boolean;
+  stats: boolean;
+}
+export type DevicePreview = 'free' | 'desktop' | 'phone' | 'phone-landscape' | 'tablet';
+export interface LayoutState {
+  place: boolean;
+  outliner: boolean;
+  details: boolean;
+  drawer: boolean;
+}
+
+const readLayout = (): LayoutState => {
+  try {
+    return { place: true, outliner: true, details: true, drawer: true, ...JSON.parse(localStorage.getItem('bz.layout') ?? '{}') };
+  } catch {
+    return { place: true, outliner: true, details: true, drawer: true };
+  }
+};
 export type SaveState = 'saved' | 'unsaved' | 'saving' | 'error';
 
 /** One undoable command, stored as forward/inverse patches (command pattern). */
@@ -41,6 +65,13 @@ export interface EditorState {
   bottomMaximized: boolean;
   activeScriptId: string | null;
   activeGraphId: string | null;
+  docs: DocKey[];
+  activeDoc: DocKey;
+  layout: LayoutState;
+  viewport: ViewportOptions;
+  device: DevicePreview;
+  paletteOpen: boolean;
+  tutorialOpen: boolean;
 
   open(projectId: string, project: ProjectData): void;
   close(): void;
@@ -53,6 +84,10 @@ export interface EditorState {
   set(partial: Partial<EditorState>): void;
   openScript(id: string): void;
   openGraph(id: string): void;
+  openDoc(key: DocKey): void;
+  closeDoc(key: DocKey): void;
+  toggleLayout(part: keyof LayoutState, value?: boolean): void;
+  setViewport(patch: Partial<ViewportOptions>): void;
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -68,11 +103,18 @@ export const useEditor = create<EditorState>((set, get) => ({
   future: [],
   saveState: 'saved',
   revision: 0,
-  bottomTab: 'console',
+  bottomTab: 'content',
   rightTab: 'inspector',
   bottomMaximized: false,
   activeScriptId: null,
   activeGraphId: null,
+  docs: ['scene'],
+  activeDoc: 'scene',
+  layout: readLayout(),
+  viewport: { view: 'perspective', shading: 'lit', grid: true, gizmos: true, stats: false },
+  device: 'free',
+  paletteOpen: false,
+  tutorialOpen: false,
 
   open(projectId, project) {
     set({
@@ -88,6 +130,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       revision: 0,
       activeScriptId: project.scripts[0]?.id ?? null,
       activeGraphId: project.graphs[0]?.id ?? null,
+      docs: ['scene'],
+      activeDoc: 'scene',
     });
   },
 
@@ -150,11 +194,42 @@ export const useEditor = create<EditorState>((set, get) => ({
   set: (partial) => set(partial),
 
   openScript(id) {
-    set((s) => ({ activeScriptId: id, bottomTab: 'code', bottomMaximized: s.bottomMaximized }));
+    set({ activeScriptId: id });
+    get().openDoc(`script:${id}`);
   },
 
   openGraph(id) {
-    set({ activeGraphId: id, bottomTab: 'logic' });
+    set({ activeGraphId: id });
+    get().openDoc(`graph:${id}`);
+  },
+
+  openDoc(key) {
+    set((s) => ({ docs: s.docs.includes(key) ? s.docs : [...s.docs, key], activeDoc: key }));
+  },
+
+  closeDoc(key) {
+    if (key === 'scene') return;
+    set((s) => {
+      const docs = s.docs.filter((d) => d !== key);
+      const idx = s.docs.indexOf(key);
+      return { docs, activeDoc: s.activeDoc === key ? (docs[Math.max(0, idx - 1)] ?? 'scene') : s.activeDoc };
+    });
+  },
+
+  toggleLayout(part, value) {
+    set((s) => {
+      const layout = { ...s.layout, [part]: value ?? !s.layout[part] };
+      try {
+        localStorage.setItem('bz.layout', JSON.stringify(layout));
+      } catch {
+        /* ignore */
+      }
+      return { layout };
+    });
+  },
+
+  setViewport(patch) {
+    set((s) => ({ viewport: { ...s.viewport, ...patch } }));
   },
 }));
 

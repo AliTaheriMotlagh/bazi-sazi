@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { requireUser } from '../auth.ts';
@@ -17,19 +16,18 @@ const TYPES: Record<string, string> = {
   'audio/wav': '.wav',
   'audio/x-wav': '.wav',
   'audio/webm': '.weba',
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
   'model/gltf-binary': '.glb',
   'model/gltf+json': '.gltf',
   'font/woff2': '.woff2',
   'font/ttf': '.ttf',
 };
 
-const BY_EXT: Record<string, string> = { '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav' };
+const BY_EXT: Record<string, string> = { '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav', '.mp4': 'video/mp4', '.webm': 'video/webm' };
 
-export function assetRoutes(app: FastifyInstance, { db, config }: AppContext): void {
-  const dir = path.join(config.dataDir, 'files');
-  mkdirSync(dir, { recursive: true });
-
-  app.addContentTypeParser(/^(image|audio|model|font)\/.+$|^application\/octet-stream$/, { parseAs: 'buffer', bodyLimit: config.limits.assetBytes }, (_req, body, done) => done(null, body));
+export function assetRoutes(app: FastifyInstance, { db, config, files }: AppContext): void {
+  app.addContentTypeParser(/^(image|audio|video|model|font)\/.+$|^application\/octet-stream$/, { parseAs: 'buffer', bodyLimit: config.limits.assetBytes }, (_req, body, done) => done(null, body));
 
   /** Content-addressed upload: identical files are stored once. */
   app.post<{ Querystring: { name?: string } }>('/api/assets', async (req, reply) => {
@@ -40,13 +38,11 @@ export function assetRoutes(app: FastifyInstance, { db, config }: AppContext): v
     let mime = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
     if (mime === 'application/octet-stream') mime = BY_EXT[path.extname(String(req.query.name ?? '')).toLowerCase()] ?? mime;
     const ext = TYPES[mime];
-    if (!ext) return reply.code(415).send({ error: `Unsupported file type (${mime}). Use PNG/JPG/WebP/GIF/SVG, MP3/OGG/WAV or GLB/glTF.` });
+    if (!ext) return reply.code(415).send({ error: `Unsupported file type (${mime}). Use PNG/JPG/WebP/GIF/SVG, MP3/OGG/WAV, MP4/WebM or GLB/glTF.` });
     const hash = createHash('sha256').update(body).digest('hex').slice(0, 40);
-    const file = `${hash}${ext}`;
-    const full = path.join(dir, file);
-    if (!existsSync(full)) writeFileSync(full, body);
-    db.prepare('INSERT OR IGNORE INTO assets (hash, owner_id, mime, size, created_at) VALUES (?, ?, ?, ?, ?)').run(hash, me.sub, mime, body.length, Date.now());
-    return { url: `/files/${file}`, size: body.length, mime };
+    const url = await files.put(`${hash}${ext}`, body, mime);
+    await db.prepare('INSERT OR IGNORE INTO assets (hash, owner_id, mime, size, created_at) VALUES (?, ?, ?, ?, ?)').run(hash, me.sub, mime, body.length, Date.now());
+    return { url, size: body.length, mime };
   });
 }
 

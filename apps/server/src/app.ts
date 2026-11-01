@@ -7,6 +7,7 @@ import { authHook } from './auth.ts';
 import { config as defaultConfig } from './config.ts';
 import type { AppContext } from './context.ts';
 import { openDb } from './db.ts';
+import { blobStore, diskStore, unavailableStore } from './storage.ts';
 import { multiplayer } from './multiplayer.ts';
 import { aiRoutes } from './routes/ai.ts';
 import { assetRoutes, FILES_HEADERS } from './routes/assets.ts';
@@ -28,8 +29,9 @@ export function subdomainSlug(host: string | undefined, baseDomain: string): str
 
 export async function buildApp(overrides: Partial<AppContext> = {}): Promise<FastifyInstance> {
   const config = overrides.config ?? defaultConfig;
-  const db = overrides.db ?? openDb(config.dataDir);
-  const ctx: AppContext = { db, config };
+  const db = overrides.db ?? (await openDb(config));
+  const files = overrides.files ?? (config.blobToken ? blobStore(config.blobToken) : config.serverless ? unavailableStore() : diskStore(path.join(config.dataDir, 'files')));
+  const ctx: AppContext = { db, config, files };
 
   const app = Fastify({
     logger: config.isProd ? { level: 'info' } : { level: 'warn' },
@@ -43,22 +45,36 @@ export async function buildApp(overrides: Partial<AppContext> = {}): Promise<Fas
     reply.header('referrer-policy', 'strict-origin-when-cross-origin');
     if (!reply.hasHeader('cross-origin-opener-policy')) reply.header('cross-origin-opener-policy', 'same-origin-allow-popups');
   });
-  app.setErrorHandler((err: Error & { statusCode?: number }, req, reply) => {
+  app.setErrorHandler((err: Error & { statusCode?: number; expose?: boolean }, req, reply) => {
     const status = err.statusCode ?? 500;
-    if (status >= 500) req.log.error(err);
-    void reply.code(status).send({ error: status >= 500 ? 'Something went wrong on the server.' : err.message });
+    if (status >= 500 && !err.expose) req.log.error(err);
+    void reply.code(status).send({ error: status >= 500 && !err.expose ? 'Something went wrong on the server.' : err.message });
   });
 
-  await app.register(fastifyWebsocket, { options: { maxPayload: config.limits.wsMessageBytes } });
+  // Serverless platforms can't keep sockets open: multiplayer then runs peer-to-peer
+  // (or on an external REALTIME_URL server).
+  if (!config.serverless) await app.register(fastifyWebsocket, { options: { maxPayload: config.limits.wsMessageBytes } });
 
   app.get('/api/health', async () => ({ ok: true }));
+  /** Tells clients how this deployment works (multiplayer transport, game URLs). */
+  app.get('/api/config', async (_req, reply) => {
+    reply.header('access-control-allow-origin', '*'); // read by sandboxed game iframes
+    return {
+    realtime: config.serverless && !config.realtimeUrl ? 'p2p' : 'ws',
+    realtimeUrl: config.realtimeUrl || null,
+    gameHost: config.subdomains ? 'subdomain' : 'path',
+    storage: { database: config.databaseUrl ? 'libsql' : 'sqlite', files: config.blobToken ? 'blob' : config.serverless ? 'none' : 'disk' },
+    // Serverless without a real database = demo mode: data vanishes when the instance sleeps.
+    ephemeral: config.serverless && !config.databaseUrl,
+    };
+  });
   // Used by the HTTPS proxy (Caddy on-demand TLS): only issue certificates for real games.
   app.get<{ Querystring: { domain?: string } }>('/api/tls-check', async (req, reply) => {
     const domain = String(req.query.domain ?? '').toLowerCase();
     const baseHost = config.baseDomain.split(':')[0];
     if (domain === baseHost || domain === `www.${baseHost}`) return { ok: true };
     const slug = subdomainSlug(domain, baseHost);
-    const exists = slug && db.prepare('SELECT 1 FROM games WHERE slug = ?').get(slug);
+    const exists = slug && (await db.prepare('SELECT 1 FROM games WHERE slug = ?').get(slug));
     return exists ? { ok: true } : reply.code(404).send({ ok: false });
   });
   authRoutes(app, ctx);
@@ -66,7 +82,11 @@ export async function buildApp(overrides: Partial<AppContext> = {}): Promise<Fas
   gameRoutes(app, ctx);
   assetRoutes(app, ctx);
   aiRoutes(app, ctx);
-  multiplayer(app, ctx);
+  if (!config.serverless) multiplayer(app, ctx);
+  if (config.serverless) {
+    app.addHook('onClose', async () => db.close());
+    return app;
+  }
 
   // Uploaded asset files.
   await app.register(fastifyStatic, {
@@ -116,3 +136,4 @@ export async function buildApp(overrides: Partial<AppContext> = {}): Promise<Fas
   app.addHook('onClose', async () => db.close());
   return app;
 }
+

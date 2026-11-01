@@ -1,6 +1,7 @@
 import type { ComponentData, EntityData, GameMode, GraphData, ProjectData, Vec3 } from '../types';
 import { uid } from '../util';
 import { comp, createEntity, createPrefab, createProject, createScript } from './defaults';
+import { metroLines, royaleArena, towerDefense, villageBuilder } from './strategyTemplates';
 
 export interface Template {
   id: string;
@@ -10,6 +11,9 @@ export interface Template {
   tags: string[];
   /** Two-color gradient for the card. */
   colors: [string, string];
+  /** Preview image (rendered from the real template). */
+  thumbnail?: string;
+  genre: 'starter' | 'action' | 'strategy' | 'puzzle' | 'social';
   build(name?: string): ProjectData;
 }
 
@@ -348,16 +352,21 @@ function noCode(name = 'No-Code Starter'): ProjectData {
 }
 
 export const TEMPLATES: Template[] = [
-  { id: 'empty-3d', name: 'Empty 3D', description: 'Camera, sun and sky. Start from scratch.', mode: '3d', tags: ['3D'], colors: ['#4361ee', '#4cc9f0'], build: (n) => createProject(n ?? 'My 3D Game', '3d') },
-  { id: 'empty-2d', name: 'Empty 2D', description: 'A blank 2D canvas with an orthographic camera.', mode: '2d', tags: ['2D'], colors: ['#7209b7', '#f72585'], build: (n) => createProject(n ?? 'My 2D Game', '2d') },
-  { id: 'platformer', name: '2D Platformer', description: 'Tile-map level, coins, spikes, double-jump and a goal flag.', mode: '2d', tags: ['2D', 'No code'], colors: ['#06d6a0', '#118ab2'], build: platformer },
-  { id: 'shooter', name: 'Top-Down Shooter', description: 'Waves of enemies, bullets, health and score. Glowing graphics.', mode: '2d', tags: ['2D', 'Scripts'], colors: ['#ef476f', '#ffd166'], build: shooter },
-  { id: 'collector', name: '3D Coin Adventure', description: 'Third-person island with physics crates and collectibles.', mode: '3d', tags: ['3D', 'Visual script'], colors: ['#2d6a4f', '#95d5b2'], build: collector },
-  { id: 'playground', name: 'Physics Playground', description: 'First-person controller, ball cannon and physics towers.', mode: '3d', tags: ['3D', 'FPS'], colors: ['#ff7b00', '#ffb700'], build: playground },
-  { id: 'arena', name: 'Multiplayer Arena', description: 'Real-time online play. Everyone pushes the same ball.', mode: '3d', tags: ['3D', 'Multiplayer'], colors: ['#3a86ff', '#8338ec'], build: arena },
-  { id: 'vr', name: 'VR Gallery', description: 'WebXR-ready scene for headsets, with bloom glow.', mode: '3d', tags: ['3D', 'VR'], colors: ['#240046', '#c77dff'], build: vr },
-  { id: 'nocode', name: 'No-Code Starter', description: 'Player logic built only with visual scripting nodes.', mode: '2d', tags: ['2D', 'Visual script'], colors: ['#264653', '#e9c46a'], build: noCode },
+  { id: 'royale', name: 'Royale Arena', description: 'Card battler: spend elixir to deploy troops that fight across the river. Beat the AI!', mode: '3d', genre: 'strategy', tags: ['3D', 'Strategy', 'AI opponent'], colors: ['#1d4ed8', '#e11d48'], build: royaleArena },
+  { id: 'village', name: 'Village Builder', description: 'Base builder: place buildings on a grid, mine gold, defend against goblin raids.', mode: '3d', genre: 'strategy', tags: ['3D', 'Strategy', 'Builder'], colors: ['#15803d', '#facc15'], build: villageBuilder },
+  { id: 'tower-defense', name: 'Tower Defense', description: 'Enemies walk a road in waves. Build towers with the gold you earn.', mode: '3d', genre: 'strategy', tags: ['3D', 'Strategy', 'Waves'], colors: ['#b45309', '#84cc16'], build: towerDefense },
+  { id: 'metro', name: 'Metro Lines', description: 'Draw subway lines between stations and keep passengers moving (Mini Metro-like).', mode: '2d', genre: 'puzzle', tags: ['2D', 'Puzzle', 'Simulation'], colors: ['#e63946', '#1d7fd6'], build: metroLines },
+  { id: 'platformer', name: '2D Platformer', description: 'Tile-map level, coins, spikes, double-jump and a goal flag.', mode: '2d', genre: 'action', tags: ['2D', 'No code'], colors: ['#06d6a0', '#118ab2'], build: platformer },
+  { id: 'shooter', name: 'Top-Down Shooter', description: 'Waves of enemies, bullets, health and score. Glowing graphics.', mode: '2d', genre: 'action', tags: ['2D', 'Scripts'], colors: ['#ef476f', '#ffd166'], build: shooter },
+  { id: 'collector', name: '3D Coin Adventure', description: 'Third-person island with physics crates and collectibles.', mode: '3d', genre: 'action', tags: ['3D', 'Visual script'], colors: ['#2d6a4f', '#95d5b2'], build: collector },
+  { id: 'playground', name: 'Physics Playground', description: 'First-person controller, ball cannon and physics towers.', mode: '3d', genre: 'action', tags: ['3D', 'FPS'], colors: ['#ff7b00', '#ffb700'], build: playground },
+  { id: 'arena', name: 'Multiplayer Arena', description: 'Real-time online play. Everyone pushes the same ball.', mode: '3d', genre: 'social', tags: ['3D', 'Multiplayer'], colors: ['#3a86ff', '#8338ec'], build: arena },
+  { id: 'vr', name: 'VR Gallery', description: 'WebXR-ready scene for headsets, with bloom glow.', mode: '3d', genre: 'social', tags: ['3D', 'VR'], colors: ['#240046', '#c77dff'], build: vr },
+  { id: 'nocode', name: 'No-Code Starter', description: 'Player logic built only with visual scripting nodes.', mode: '2d', genre: 'starter', tags: ['2D', 'Visual script'], colors: ['#264653', '#e9c46a'], build: noCode },
+  { id: 'empty-3d', name: 'Empty 3D', description: 'Camera, sun and a physically based sky. Start from scratch.', mode: '3d', genre: 'starter', tags: ['3D'], colors: ['#4361ee', '#4cc9f0'], build: (n) => createProject(n ?? 'My 3D Game', '3d') },
+  { id: 'empty-2d', name: 'Empty 2D', description: 'A blank 2D canvas with an orthographic camera.', mode: '2d', genre: 'starter', tags: ['2D'], colors: ['#7209b7', '#f72585'], build: (n) => createProject(n ?? 'My 2D Game', '2d') },
 ];
+for (const t of TEMPLATES) t.thumbnail = `/templates/${t.id}.webp`;
 
 export function getTemplate(id: string): Template | undefined {
   return TEMPLATES.find((t) => t.id === id);

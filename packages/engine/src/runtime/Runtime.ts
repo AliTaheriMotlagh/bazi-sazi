@@ -1,8 +1,4 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { prop } from '../components/registry';
 import type { EntityData, LogLevel, Logger, PrefabData, ProjectData, SceneData, Vec3 } from '../types';
 import { damp, uid } from '../util';
@@ -11,10 +7,15 @@ import { AssetCache } from './assets';
 import { AudioEngine } from './audio';
 import { BEHAVIOURS } from './behaviours';
 import { buildVisuals } from './builders';
+import { EnvironmentController } from './environment';
+import { Effects, Tweens, type Easing, type TweenOptions } from './fx';
+import { NavGrid } from './navgrid';
+import { PostFX, type PostOptions } from './post';
+import { STRATEGY_BEHAVIOURS } from './strategy';
 import { GameObject } from './GameObject';
 import { Hud, injectRuntimeCss } from './hud';
 import { Input } from './input';
-import { NetClient } from './network';
+import { createNet, type Net, type NetOptions } from './network';
 import { initPhysics, Physics, type RayHit } from './physics';
 import { createScriptInstance, ScriptCache } from './scripting';
 import { TouchControls } from './touch';
@@ -27,7 +28,7 @@ export interface RuntimeOptions {
   mode: 'edit' | 'play';
   sceneId?: string;
   logger?: Logger;
-  network?: { url: string; name: string } | null;
+  network?: NetOptions | null;
   onSceneChange?: (sceneId: string) => void;
 }
 
@@ -50,6 +51,15 @@ export interface SpawnOptions {
   velocity?: Vec3;
   parent?: GameObject | null;
   name?: string;
+  /** Sets the team of every Unit AI in the spawned prefab. */
+  team?: string;
+}
+
+export interface FxApi {
+  shake(strength?: number, duration?: number): void;
+  popText(position: { x: number; y: number; z: number }, text: string, color?: string, size?: number): void;
+  burst(position: { x: number; y: number; z: number }, color?: string, count?: number, speed?: number): void;
+  flash(go: GameObject, color?: string, duration?: number): void;
 }
 
 export interface HudApi {
@@ -64,7 +74,7 @@ export interface GameApi {
   readonly time: { elapsed: number; dt: number; frame: number; scale: number };
   readonly input: Input;
   readonly audio: AudioEngine;
-  readonly net: NetClient | null;
+  readonly net: Net | null;
   readonly hud: HudApi;
   readonly mode: '2d' | '3d';
   readonly camera: THREE.Camera | null;
@@ -83,6 +93,13 @@ export interface GameApi {
   broadcast(message: string, data?: unknown): void;
   raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance?: number, exclude?: GameObject): RayHit | null;
   pointerWorld(): THREE.Vector3;
+  /** Grid pathfinding around static obstacles. Null if unreachable. */
+  findPath(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] | null;
+  /** Nearest live entity with a tag (optionally within a range). */
+  findNearest(tag: string, from: THREE.Vector3, maxDistance?: number): GameObject | undefined;
+  /** Animate numeric properties: game.tween(self.scale, { x: 2, y: 2 }, 0.3, { ease: 'outBack' }). */
+  tween(target: object, to: Record<string, number>, duration: number, options?: TweenOptions & { ease?: Easing }): () => void;
+  readonly fx: FxApi;
   after(seconds: number, fn: () => void): () => void;
   every(seconds: number, fn: () => void): () => void;
   log(level: LogLevel, args: unknown[], source?: string, entityId?: string): void;
@@ -138,7 +155,7 @@ export class Runtime {
   sceneId: string;
   physics: Physics | null = null;
   hud: Hud | null = null;
-  net: NetClient | null = null;
+  net: Net | null = null;
   camera: THREE.Camera | null = null;
   /** Camera supplied by the editor viewport (edit mode). */
   editorCamera: THREE.Camera | null = null;
@@ -147,6 +164,8 @@ export class Runtime {
   vars: Record<string, unknown> = {};
   /** Called every frame before rendering (editor tools, debug overlays). */
   readonly frameHooks = new Set<(dt: number) => void>();
+  /** Called after each rendered frame (editor overlays like the axis gizmo). */
+  readonly afterRenderHooks = new Set<() => void>();
 
   private overlay: HTMLElement | null;
   private logger: Logger;
@@ -154,8 +173,23 @@ export class Runtime {
   private timers: Timer[] = [];
   private ambient = new THREE.AmbientLight();
   private defaultCamera: THREE.Camera | null = null;
-  private composer: EffectComposer | null = null;
-  private renderPass: RenderPass | null = null;
+  private post: PostFX | null = null;
+  private env: EnvironmentController;
+  private quality: 'low' | 'medium' | 'high';
+  private maxPixelRatio: number;
+  private perfTime = 0;
+  private perfFrames = 0;
+  readonly fx: Effects;
+  readonly tweens = new Tweens();
+  /** Units and agents (for targeting, separation and spatial queries). */
+  readonly agents = new Set<GameObject>();
+  nav: NavGrid | null = null;
+  /** Set when the current pointer gesture became a drag (camera pan) — clicks should be ignored. */
+  pointerDragged = false;
+  /** A system that owns the current pointer gesture (e.g. drawing a route). */
+  pointerOwner: string | null = null;
+  /** Editor: objects that get a selection outline. */
+  outlined: THREE.Object3D[] = [];
   private touch: TouchControls | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private lastTime = 0;
@@ -182,12 +216,18 @@ export class Runtime {
     this.networkOptions = opts.network;
 
     const g = opts.project.settings.graphics;
-    this.renderer = new THREE.WebGLRenderer({ canvas: opts.canvas, antialias: g.antialias && !g.pixelArt, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, g.maxPixelRatio));
+    const mobile = typeof navigator !== 'undefined' && (/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) || !!window.matchMedia?.('(pointer: coarse)').matches);
+    this.quality = !g.quality || g.quality === 'auto' ? (mobile ? 'low' : 'high') : g.quality;
+    this.maxPixelRatio = Math.min(window.devicePixelRatio || 1, g.maxPixelRatio, this.quality === 'low' ? 1.5 : 3);
+    this.renderer = new THREE.WebGLRenderer({ canvas: opts.canvas, antialias: g.antialias && !g.pixelArt, powerPreference: 'high-performance', preserveDrawingBuffer: false });
+    this.renderer.setPixelRatio(this.maxPixelRatio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = g.toneMapping ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = g.exposure ?? 1;
     this.renderer.shadowMap.enabled = g.shadows;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = this.quality === 'low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+    this.env = new EnvironmentController(this.renderer, this.scene);
+    this.fx = new Effects(this);
     if (g.pixelArt) opts.canvas.style.imageRendering = 'pixelated';
     this.scene.add(this.ambient);
 
@@ -219,7 +259,6 @@ export class Runtime {
     }
     // Created up-front so scripts can capture `net` before the socket connects.
     if (this.isPlaying && opts.network && opts.project.settings.multiplayer.enabled) this.net = this.createNetClient(opts.network);
-    if (g.bloom) this.setupBloom();
   }
 
   /** Create a runtime. Play mode initializes physics (WASM) first. */
@@ -276,7 +315,10 @@ export class Runtime {
     this.assets.dispose();
     this.resizeObserver?.disconnect();
     for (const d of this.disposers) d();
-    this.composer?.dispose();
+    this.fx.clear();
+    this.tweens.clear();
+    this.post?.dispose();
+    this.env.dispose();
     this.renderer.dispose();
   }
 
@@ -301,7 +343,7 @@ export class Runtime {
     const w = Math.max(1, el.clientWidth);
     const h = Math.max(1, el.clientHeight);
     this.renderer.setSize(w, h, false);
-    this.composer?.setSize(w, h);
+    this.post?.setSize(w, h);
     this.updateCameraProjection(w / h);
   }
 
@@ -328,12 +370,54 @@ export class Runtime {
     }
   }
 
-  private setupBloom(): void {
-    this.composer = new EffectComposer(this.renderer);
-    this.renderPass = new RenderPass(this.scene, new THREE.PerspectiveCamera());
-    this.composer.addPass(this.renderPass);
-    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), this.project.settings.graphics.bloomStrength, 0.4, 0.82));
-    this.composer.addPass(new OutputPass());
+  private postOptions(): PostOptions {
+    const g = this.project.settings.graphics;
+    return {
+      bloom: g.bloom ? g.bloomStrength : 0,
+      ssao: !!g.ssao && !this.mode2d && this.quality === 'high',
+      vignette: this.quality === 'low' ? 0 : (g.vignette ?? 0),
+      smaa: false,
+      outline: !this.isPlaying && this.outlined.length > 0,
+    };
+  }
+
+  /** (Re)build the post stack only when its options or bound camera change. */
+  private ensurePost(camera: THREE.Camera): PostFX | null {
+    const o = this.postOptions();
+    const needed = o.bloom > 0 || o.ssao || o.vignette > 0 || o.outline;
+    if (!needed || this.renderer.xr.isPresenting) {
+      if (this.post && !needed) {
+        this.post.dispose();
+        this.post = null;
+      }
+      return null;
+    }
+    if (!this.post || !PostFX.sameOptions(this.post.options, o) || (o.ssao && this.post.boundCamera !== camera)) {
+      this.post?.dispose();
+      this.post = new PostFX(this.renderer, this.scene, camera, o);
+      const el = this.canvas.parentElement ?? this.canvas;
+      this.post.setSize(Math.max(1, el.clientWidth), Math.max(1, el.clientHeight));
+    }
+    return this.post;
+  }
+
+  /** Dynamic resolution: trade sharpness for a smooth frame rate. */
+  private adaptResolution(rawDt: number): void {
+    if (!this.isPlaying || !this.project.settings.graphics.adaptiveResolution) return;
+    this.perfTime += rawDt;
+    this.perfFrames++;
+    if (this.perfTime < 1.5) return;
+    const fps = this.perfFrames / this.perfTime;
+    this.perfTime = 0;
+    this.perfFrames = 0;
+    const pr = this.renderer.getPixelRatio();
+    let next = pr;
+    if (fps < 45 && pr > 0.6) next = Math.max(0.6, pr * 0.85);
+    else if (fps > 58 && pr < this.maxPixelRatio) next = Math.min(this.maxPixelRatio, pr * 1.1);
+    if (Math.abs(next - pr) > 0.01) {
+      this.renderer.setPixelRatio(next);
+      this.resize();
+    }
   }
 
   // ════════════════════════════════════════ frame
@@ -355,6 +439,7 @@ export class Runtime {
       this.time.elapsed += dt;
       this.time.frame++;
       this.runTimers();
+      this.tweens.update(dt);
       const objects = [...this.entities.values()];
       for (const go of objects) if (go.alive) go.invoke('update', dt);
       this.stats.updateMs = performance.now() - t0;
@@ -382,8 +467,10 @@ export class Runtime {
 
     for (const hook of this.frameHooks) hook(rawDt);
     t0 = performance.now();
-    this.render();
+    this.render(running ? dt : rawDt);
+    for (const hook of this.afterRenderHooks) hook();
     this.stats.renderMs = performance.now() - t0;
+    this.adaptResolution(rawDt);
     if (this.isPlaying) this.input.endFrame();
 
     this.stats.frameMs = performance.now() - frameStart;
@@ -401,14 +488,21 @@ export class Runtime {
     }
   }
 
-  render(): void {
+  render(dt = 0): void {
     const camera = this.isPlaying ? this.camera : (this.editorCamera ?? this.camera);
     if (!camera) return;
     this.updateCameraProjection();
-    if (this.composer && this.renderPass && !this.renderer.xr.isPresenting) {
-      this.renderPass.camera = camera;
-      this.composer.render();
+    this.renderer.toneMappingExposure = this.project.settings.graphics.exposure ?? 1;
+    this.env.update(camera);
+    const shake = this.fx.beforeRender(dt, camera);
+    camera.position.add(shake);
+    camera.updateMatrixWorld();
+    const post = this.ensurePost(camera);
+    if (post) {
+      post.setOutlined(this.outlined);
+      post.render(camera);
     } else this.renderer.render(this.scene, camera);
+    camera.position.sub(shake);
   }
 
   private pollXrInput(): void {
@@ -479,6 +573,9 @@ export class Runtime {
     if (!scene) return;
     for (const go of [...this.entities.values()]) this.destroy(go, true);
     this.entities.clear();
+    this.agents.clear();
+    this.fx.clear();
+    this.tweens.clear();
     this.dataHashes.clear();
     this.timers = [];
     this.netTargets.clear();
@@ -490,6 +587,7 @@ export class Runtime {
     this.sceneId = scene.id;
     const s = this.project.settings;
     if (this.isPlaying && s.physics.enabled) this.physics = new Physics(s.gravity, s.mode === '2d', s.physics.fixedTimestep);
+    this.nav = this.isPlaying ? new NavGrid(() => this.entities.values(), s.mode === '2d', s.navigation?.cellSize ?? 0.5) : null;
     this.applyEnvironment(scene);
     this.instantiate(scene.entities, null);
     this.chooseCamera();
@@ -505,10 +603,9 @@ export class Runtime {
 
   private applyEnvironment(scene: SceneData): void {
     const env = scene.environment;
-    this.scene.background = new THREE.Color(this.project.settings.background);
     this.ambient.color.set(env.ambientColor);
     this.ambient.intensity = env.ambientIntensity;
-    this.scene.fog = env.fogDensity > 0 ? new THREE.FogExp2(env.fogColor, env.fogDensity) : null;
+    this.env.apply(env, this.project.settings);
   }
 
   private chooseCamera(): void {
@@ -616,7 +713,7 @@ export class Runtime {
         const graph = this.project.graphs.find((g) => g.id === c.graph || g.name === c.graph);
         if (graph) go.addBehaviour(graph.name, createGraphBehaviour(graph, go, this.api));
       } else {
-        const factory = BEHAVIOURS[c.type];
+        const factory = BEHAVIOURS[c.type] ?? STRATEGY_BEHAVIOURS[c.type];
         if (factory) go.addBehaviour(c.type, factory(go, c, this));
       }
     }
@@ -665,6 +762,7 @@ export class Runtime {
         if (opts.rotation) copy.transform.rotation = [...opts.rotation];
         if (opts.name) copy.name = opts.name;
       }
+      if (opts.team) for (const comp of copy.components) if (comp.type === 'UnitAI') comp.team = opts.team;
       return copy;
     });
     const created = this.instantiate(list, opts.parent ?? null, { ...flags, prefabId: prefab.id });
@@ -678,7 +776,9 @@ export class Runtime {
     go.alive = false;
     go.invoke('onDestroy');
     for (const child of [...go.children]) this.destroy(child, silent);
+    if (this.physics?.has(go) && !go.getComponent('RigidBody')) this.nav?.markDirty();
     this.physics?.remove(go);
+    this.agents.delete(go);
     go.parent?.children.delete(go);
     go.object3d.removeFromParent();
     go.dispose();
@@ -779,8 +879,8 @@ export class Runtime {
   }
 
   // ════════════════════════════════════════ multiplayer
-  private createNetClient(options: { url: string; name: string }): NetClient {
-    const net = new NetClient(options);
+  private createNetClient(options: NetOptions): Net {
+    const net = createNet(options);
     net.on('__tf', (data, from) => this.receiveTransforms(data as NetTransform[], from));
     net.on('leave', (_d, from) => {
       for (const go of [...this.entities.values()]) if (go.ownerId === from) this.destroy(go);
@@ -995,6 +1095,27 @@ export class Runtime {
       after: (s, fn) => addTimer(s, fn),
       every: (s, fn) => addTimer(s, fn, Math.max(0.001, s)),
       log: (level, args, source, entityId) => rt.log({ level, message: args.map(formatArg).join(' '), source, entityId }),
+      findPath: (from, to) => rt.nav?.findPath(from, to) ?? null,
+      findNearest: (tag, from, maxDistance = Infinity) => {
+        let best: GameObject | undefined;
+        let bestD = maxDistance;
+        for (const go of rt.entities.values()) {
+          if (!go.alive || !go.tags.has(tag)) continue;
+          const d = go.worldPosition(_v).distanceTo(from);
+          if (d < bestD) {
+            best = go;
+            bestD = d;
+          }
+        }
+        return best;
+      },
+      tween: (target, to, duration, options) => rt.tweens.add(target, to, duration, options),
+      fx: {
+        shake: (s, d) => rt.fx.shake(s, d),
+        popText: (p, t, c, size) => rt.fx.popText(p, t, c, size),
+        burst: (p, c, n, sp) => rt.fx.burst(p, c, n, sp),
+        flash: (go, c, d) => rt.fx.flash(go, c, d),
+      },
       pause: () => rt.setPaused(true),
       resume: () => rt.setPaused(false),
     };

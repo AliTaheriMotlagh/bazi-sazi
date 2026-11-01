@@ -129,10 +129,24 @@ export const api = {
       headers: { 'content-type': file.type || 'application/octet-stream' },
     }),
 
+  /** Deployment capabilities (cached): multiplayer transport, game URL style, storage. */
+  config: () => (configCache ??= request<DeployConfig>('/api/config').catch((err) => {
+    configCache = null;
+    throw err;
+  })),
   aiStatus: () => request<{ serverKey: boolean }>('/api/ai/status'),
   aiModels: () => request<{ models: AiModel[] }>('/api/ai/models'),
   aiChat: (body: unknown, userKey?: string) => post<AiResponse>('/api/ai/chat', body, userKey ? { 'x-openrouter-key': userKey } : undefined),
 };
+
+export interface DeployConfig {
+  realtime: 'ws' | 'p2p';
+  realtimeUrl: string | null;
+  gameHost: 'subdomain' | 'path';
+  storage: { database: string; files: string };
+  ephemeral?: boolean;
+}
+let configCache: Promise<DeployConfig> | null = null;
 
 export interface AiToolCall {
   id: string;
@@ -151,11 +165,26 @@ export interface AiResponse {
   usage?: { prompt_tokens: number; completion_tokens: number; cost?: number };
 }
 
-/** Base URL of a published game: its own subdomain. */
+let subdomains = true;
+void Promise.resolve()
+  .then(() => api.config())
+  .then((c) => (subdomains = c.gameHost === 'subdomain'))
+  .catch(() => undefined);
+
+/** Public URL of a published game: its own subdomain, or /embed/<slug> where subdomains aren't set up. */
 export function gameUrl(slug: string): string {
   const { protocol, host } = location;
-  const base = host.replace(/^www\./, '');
-  return `${protocol}//${slug}.${base}/`;
+  if (!subdomains) return `${protocol}//${host}/embed/${slug}`;
+  return `${protocol}//${slug}.${host.replace(/^www\./, '')}/`;
+}
+
+/** Network options for the engine based on how this deployment does multiplayer. */
+export async function networkFor(game: string, room: string, name: string): Promise<{ transport: 'ws' | 'p2p'; url?: string; room?: string; name: string }> {
+  const cfg = await api.config().catch(() => null);
+  if (cfg?.realtime === 'p2p') return { transport: 'p2p', room: `${game}/${room}`, name };
+  const base = cfg?.realtimeUrl ? cfg.realtimeUrl.replace(/\/$/, '') + '/ws/play' : null;
+  const url = base ? `${base}?game=${encodeURIComponent(game)}&room=${encodeURIComponent(room)}` : wsUrl(game, room);
+  return { transport: 'ws', url, name };
 }
 
 export function embedUrl(slug: string, room?: string): string {

@@ -28,17 +28,12 @@ function configure(m: typeof monaco): void {
   }
 }
 
-export default function ScriptEditor() {
-  const scripts = useEditor((s) => s.project?.scripts ?? []);
-  const activeId = useEditor((s) => s.activeScriptId);
+/** Full-size code editor for one script (opened as a document tab). */
+export default function ScriptEditor({ id }: { id: string }) {
+  const script = useEditor((s) => s.project?.scripts.find((x) => x.id === id));
   const theme = useUi((s) => s.theme);
-  const script = scripts.find((s) => s.id === activeId) ?? scripts[0];
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const error = useMemo(() => (script ? compileScript(script).error : null), [script]);
-
-  useEffect(() => {
-    if (script && script.id !== activeId) editor().set({ activeScriptId: script.id });
-  }, [script, activeId]);
 
   if (!script)
     return (
@@ -63,11 +58,7 @@ export default function ScriptEditor() {
   return (
     <div className="col" style={{ height: '100%', gap: 0 }}>
       <div className="row" style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 6 }}>
-        <select className="select" style={{ width: 200 }} value={script.id} onChange={(e) => editor().set({ activeScriptId: e.target.value })} aria-label="Script">
-          {scripts.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+        <span className="doc-title"><Icon name="FileCode" size={14} /> {script.name}</span>
         <select className="select" style={{ width: 120 }} value={script.language} onChange={(e) => updateScript(script.id, { language: e.target.value as 'javascript' | 'typescript' })} aria-label="Language">
           <option value="javascript">JavaScript</option>
           <option value="typescript">TypeScript</option>

@@ -209,6 +209,17 @@ export class GameObject {
     return this;
   }
 
+  /** Walk to a point using pathfinding (needs a Nav Agent component). */
+  moveTo(x: number, y: number, z = 0): this {
+    this.send('moveTo', { x, y, z });
+    return this;
+  }
+
+  stop(): this {
+    this.send('stop');
+    return this;
+  }
+
   send(message: string, data?: unknown, from: GameObject | null = null): void {
     this.invoke('onMessage', message, data, from);
   }

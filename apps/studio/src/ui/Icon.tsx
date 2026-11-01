@@ -1,20 +1,11 @@
 import {
-  ArrowLeft, Atom, Bot, Box, Bug, Check, ChevronDown, ChevronRight, Circle, CircleAlert, Clapperboard, Code, Coins, Copy, CopyPlus, Cpu, Crosshair,
-  Cylinder, Download, EllipsisVertical, ExternalLink, Eye, EyeOff, FileCode, Flag, Flashlight, Folder, FolderOpen, Footprints, Gamepad2, Gauge, Glasses,
-  Globe, Grid3x3, Heart, House, Image, Info, Layers, Library, Lightbulb, LoaderCircle, LogOut, Magnet, Maximize2, Menu, Minimize2, Monitor, Moon, Move,
-  Move3d, Music, Package, PanelTop, Pause, Pencil, Play, Plus, Puzzle, RectangleHorizontal, Redo2, Rocket, Rotate3d, RotateCw, Save, Scale3d, Search, Send,
-  Settings, Shapes, Share2, SlidersHorizontal, Smartphone, Sparkles, Square, StepForward, Sun, SunMedium, Swords, Target, Terminal, Timer, Trash,
-  TriangleAlert, Type, Undo2, Upload, User, Users, Video, Volume2, WandSparkles, Waves, Wifi, Workflow, X, Zap, type LucideIcon,
+  Activity, ArrowLeft, Dot, ArrowUpRight, Atom, BookOpen, Bot, Box, Boxes, Brush, Bug, Building2, Camera, Castle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, CircleAlert, CircleDot, CircleHelp, Clapperboard, Clock, Cloud, Code, Coins, Command, Copy, CopyPlus, Cpu, Crosshair, Cylinder, Database, Download, Ellipsis, EllipsisVertical, ExternalLink, Eye, EyeOff, FileAudio, FileCode, FileImage, FileVideo, Film, Flag, Flashlight, Folder, FolderOpen, FolderTree, Footprints, Gamepad2, Gauge, Glasses, Globe, GraduationCap, Grid2x2, Grid3x3, Hammer, Hand, HardDrive, Heart, House, Image, Info, Keyboard, Laptop, Layers, Library, Lightbulb, ListTree, LoaderCircle, Lock, LogOut, Magnet, Maximize, Maximize2, Menu, Minimize2, Monitor, Moon, Mountain, MousePointer2, Move, Move3d, Music, Package, Palette, PanelBottom, PanelLeft, PanelRight, PanelTop, Pause, Pencil, Pickaxe, Play, Plus, Puzzle, Radio, RectangleHorizontal, RectangleVertical, Redo2, Rocket, Rotate3d, RotateCcw, RotateCw, Route, Save, Scale3d, ScanEye, Search, Send, Settings, Shapes, Share2, Shield, SlidersHorizontal, Smartphone, Sparkles, Square, Star, StepForward, Sun, SunMedium, SunMoon, Swords, Tablet, Target, Terminal, Timer, TrainFront, Trash, TriangleAlert, Type, Undo2, Unlock, Upload, User, Users, Video, Volume2, WandSparkles, Waves, Waypoints, Wifi, Workflow, Wrench, X, Zap,
+  type LucideIcon,
 } from 'lucide-react';
 
 /** Explicit registry (tree-shaken) so data can reference icons by name. */
 const ICONS: Record<string, LucideIcon> = {
-  ArrowLeft, Atom, Bot, Box, Bug, Check, ChevronDown, ChevronRight, Circle, CircleAlert, Clapperboard, Code, Coins, Copy, CopyPlus, Cpu, Crosshair,
-  Cylinder, Download, EllipsisVertical, ExternalLink, Eye, EyeOff, FileCode, Flag, Flashlight, Folder, FolderOpen, Footprints, Gamepad2, Gauge, Glasses,
-  Globe, Grid3x3, Heart, House, Image, Info, Layers, Library, Lightbulb, LoaderCircle, LogOut, Magnet, Maximize2, Menu, Minimize2, Monitor, Moon, Move,
-  Move3d, Music, Package, PanelTop, Pause, Pencil, Play, Plus, Puzzle, RectangleHorizontal, Redo2, Rocket, Rotate3d, RotateCw, Save, Scale3d, Search, Send,
-  Settings, Shapes, Share2, SlidersHorizontal, Smartphone, Sparkles, Square, StepForward, Sun, SunMedium, Swords, Target, Terminal, Timer, Trash,
-  TriangleAlert, Type, Undo2, Upload, User, Users, Video, Volume2, WandSparkles, Waves, Wifi, Workflow, X, Zap,
+  Activity, ArrowLeft, Dot, ArrowUpRight, Atom, BookOpen, Bot, Box, Boxes, Brush, Bug, Building2, Camera, Castle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, CircleAlert, CircleDot, CircleHelp, Clapperboard, Clock, Cloud, Code, Coins, Command, Copy, CopyPlus, Cpu, Crosshair, Cylinder, Database, Download, Ellipsis, EllipsisVertical, ExternalLink, Eye, EyeOff, FileAudio, FileCode, FileImage, FileVideo, Film, Flag, Flashlight, Folder, FolderOpen, FolderTree, Footprints, Gamepad2, Gauge, Glasses, Globe, GraduationCap, Grid2x2, Grid3x3, Hammer, Hand, HardDrive, Heart, House, Image, Info, Keyboard, Laptop, Layers, Library, Lightbulb, ListTree, LoaderCircle, Lock, LogOut, Magnet, Maximize, Maximize2, Menu, Minimize2, Monitor, Moon, Mountain, MousePointer2, Move, Move3d, Music, Package, Palette, PanelBottom, PanelLeft, PanelRight, PanelTop, Pause, Pencil, Pickaxe, Play, Plus, Puzzle, Radio, RectangleHorizontal, RectangleVertical, Redo2, Rocket, Rotate3d, RotateCcw, RotateCw, Route, Save, Scale3d, ScanEye, Search, Send, Settings, Shapes, Share2, Shield, SlidersHorizontal, Smartphone, Sparkles, Square, Star, StepForward, Sun, SunMedium, SunMoon, Swords, Tablet, Target, Terminal, Timer, TrainFront, Trash, TriangleAlert, Type, Undo2, Unlock, Upload, User, Users, Video, Volume2, WandSparkles, Waves, Waypoints, Wifi, Workflow, Wrench, X, Zap,
 };
 
 export type IconName = keyof typeof ICONS;

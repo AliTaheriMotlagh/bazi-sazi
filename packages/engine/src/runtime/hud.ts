@@ -87,6 +87,25 @@ export const RUNTIME_CSS = `
 .bz-buttons button{pointer-events:auto;width:66px;height:66px;border-radius:50%;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.15);color:#fff;font:700 20px Inter,system-ui,sans-serif;touch-action:none}
 .bz-buttons button:nth-child(2){margin-bottom:46px}
 .bz-buttons button.active{background:rgba(255,255,255,.4)}
+.bz-pop{position:absolute;left:0;top:0;font-weight:900;white-space:nowrap;pointer-events:none;text-shadow:0 2px 0 rgba(0,0,0,.55),0 0 12px rgba(0,0,0,.4);-webkit-text-stroke:1px rgba(0,0,0,.35);will-change:transform,opacity}
+.bz-deck{position:absolute;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:auto;max-width:calc(100% - 16px)}
+.bz-cards{display:flex;gap:8px;overflow-x:auto;padding:14px 10px 4px;scrollbar-width:none}
+.bz-card{position:relative;flex:none;width:76px;height:96px;border-radius:14px;border:2px solid rgba(255,255,255,.25);background:linear-gradient(160deg,#3b4a8c,#1d2445);color:#fff;font:700 12px Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;box-shadow:0 6px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.25);transition:transform .12s,filter .15s,border-color .15s}
+.bz-card:hover{transform:translateY(-4px)}
+.bz-card.selected{transform:translateY(-10px) scale(1.06);border-color:#ffd166;box-shadow:0 0 0 3px rgba(255,209,102,.45),0 10px 22px rgba(0,0,0,.5)}
+.bz-card.disabled{filter:grayscale(.85) brightness(.7)}
+.bz-card-icon{font-size:30px;line-height:1}
+.bz-card-name{max-width:68px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.9}
+.bz-card-cost{position:absolute;top:-8px;left:-8px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#f0abfc,#a21caf);border:2px solid #fff;font-size:13px;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.bz-currency{position:relative;width:min(360px,80vw);height:22px;border-radius:12px;background:rgba(10,12,20,.75);border:2px solid rgba(255,255,255,.2);overflow:hidden;--fill:0}
+.bz-currency::before{content:'';position:absolute;inset:0;width:calc(var(--fill)*100%);background:linear-gradient(90deg,#c026d3,#e879f9);transition:width .2s}
+.bz-currency::after{content:attr(data-label) ' ' attr(data-value);position:absolute;inset:0;display:grid;place-items:center;font:800 12px Inter,system-ui,sans-serif;color:#fff;text-shadow:0 1px 2px #000}
+.bz-currency.plain{width:auto;padding:0 14px;background:rgba(10,12,20,.75)}
+.bz-currency.plain::before{display:none}
+.bz-currency.plain::after{position:static;display:block;line-height:18px}
+.bz-video{position:absolute;inset:0;background:#000;display:grid;place-items:center;pointer-events:auto;z-index:20}
+.bz-video video{width:100%;height:100%;object-fit:contain}
+.bz-video button{position:absolute;right:16px;bottom:16px;padding:8px 16px;border-radius:99px;border:1px solid rgba(255,255,255,.4);background:rgba(0,0,0,.5);color:#fff;font:600 14px Inter,system-ui,sans-serif;cursor:pointer}
 `;
 
 let injected = false;

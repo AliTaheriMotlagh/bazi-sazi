@@ -178,3 +178,60 @@ describe('visual scripting', () => {
     expect(api.vars.coins).toBe(1);
   });
 });
+
+describe('pathfinding', () => {
+  it('routes around a wall through the gap', async () => {
+    const { GridPathfinder } = await import('../src/runtime/navgrid');
+    const g = new GridPathfinder({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, 1);
+    g.blockRect(4, 0, 5, 8); // wall with a gap at the top (y 8..10)
+    const path = g.find(1.5, 1.5, 8.5, 1.5)!;
+    expect(path).not.toBeNull();
+    expect(path[0]).toEqual([1.5, 1.5]);
+    expect(path[path.length - 1]).toEqual([8.5, 1.5]);
+    // Must go over the wall's end, never through it.
+    expect(path.some(([, y]) => y >= 8)).toBe(true);
+    for (const [x, y] of path) expect(g.isBlocked(...g.cellOf(x, y))).toBe(false);
+  });
+
+  it('returns null when the goal is sealed off', async () => {
+    const { GridPathfinder } = await import('../src/runtime/navgrid');
+    const g = new GridPathfinder({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, 1);
+    g.blockRect(4, 0, 5, 10);
+    expect(g.find(1.5, 5.5, 8.5, 5.5)).toBeNull();
+  });
+});
+
+describe('migration', () => {
+  it('fills settings added in later versions without touching user data', async () => {
+    const { normalizeProject } = await import('../src');
+    const legacy = createProject('Old', '3d');
+    delete (legacy.settings as Partial<typeof legacy.settings>).navigation;
+    delete (legacy.settings.graphics as Partial<typeof legacy.settings.graphics>).ssao;
+    for (const s of legacy.scenes) s.environment = { ambientColor: '#fff', ambientIntensity: 0.5, fogColor: '#000', fogDensity: 0 } as never;
+    legacy.settings.input = { dash: ['ShiftLeft'] };
+    const p = normalizeProject(legacy);
+    expect(p.settings.navigation.cellSize).toBeGreaterThan(0);
+    expect(p.settings.graphics.ssao).toBe(false);
+    expect(p.scenes[0].environment.sky).toBe('color'); // legacy scenes keep their flat look
+    expect(p.scenes[0].environment.ambientIntensity).toBe(0.5);
+    expect(p.settings.input.dash).toEqual(['ShiftLeft']);
+    expect(p.settings.input.jump).toBeDefined();
+  });
+});
+
+describe('tweens', () => {
+  it('animates, yoyos and completes', async () => {
+    const { Tweens } = await import('../src/runtime/fx');
+    const tw = new Tweens();
+    const obj = { x: 0 };
+    let done = false;
+    tw.add(obj, { x: 10 }, 1, { ease: 'linear', yoyo: true, onComplete: () => (done = true) });
+    tw.update(0.5);
+    expect(obj.x).toBeCloseTo(5);
+    tw.update(0.5);
+    expect(obj.x).toBeCloseTo(10);
+    tw.update(1);
+    expect(obj.x).toBeCloseTo(0);
+    expect(done).toBe(true);
+  });
+});

@@ -257,10 +257,9 @@ function Palette() {
   );
 }
 
-export default function LogicEditor() {
-  const graphs = useEditor((s) => s.project?.graphs ?? []);
-  const activeId = useEditor((s) => s.activeGraphId);
-  const graph = graphs.find((g) => g.id === activeId) ?? graphs[0];
+/** Node-graph editor for one visual script (opened as a document tab). */
+export default function LogicEditor({ id }: { id: string }) {
+  const graph = useEditor((s) => s.project?.graphs.find((g) => g.id === id));
   if (!graph)
     return (
       <div className="empty">
@@ -273,9 +272,7 @@ export default function LogicEditor() {
   return (
     <div className="col" style={{ height: '100%', gap: 0 }}>
       <div className="row" style={{ padding: '4px 8px', borderBottom: '1px solid var(--border)' }}>
-        <select className="select" style={{ width: 200 }} value={graph.id} onChange={(e) => editor().set({ activeGraphId: e.target.value })} aria-label="Graph">
-          {graphs.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
+        <span className="doc-title"><Icon name="Workflow" size={14} /> {graph.name}</span>
         <span className="faint hide-phone" style={{ fontSize: 12 }}>Drag from a ▶ pin to chain actions. Click or drag nodes from the left. Delete with Backspace.</span>
       </div>
       <div className="vs-wrap" style={{ flex: 1, minHeight: 0 }}>

@@ -10,6 +10,8 @@
   "dependencies": {
     "@fastify/static": "^10.1.8",
     "@fastify/websocket": "^11.3.6",
+    "@libsql/client": "^0.18.0",
+    "@vercel/blob": "^2.8.2",
     "fastify": "^5.12.7",
     "zod": "^4.6.7"
   },

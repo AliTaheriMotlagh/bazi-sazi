@@ -3,10 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { HomePage } from './pages/Home';
 import { ExplorePage } from './pages/Explore';
+import { LearnPage } from './pages/Learn';
 import { PlayPage } from './pages/Play';
 import { useAuth } from './store/auth';
 import { useUi } from './store/ui';
 import { Spinner, Toasts } from './ui/primitives';
+import { registerServiceWorker } from './pwa';
 import './styles.css';
 
 // The editor (three.js, Monaco, React Flow) is code-split from the public pages.
@@ -38,6 +40,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/explore" element={<ExplorePage />} />
           <Route path="/play/:slug" element={<PlayPage />} />
+          <Route path="/learn" element={<LearnPage />} />
           <Route path="/edit/:id" element={<EditorPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
@@ -54,3 +57,5 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+registerServiceWorker();

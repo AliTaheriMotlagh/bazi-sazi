@@ -17,6 +17,12 @@ function entityIcon(e: EntityData): string {
 }
 
 /** Items for the "Create" menu, filtered for the project mode. */
+/** Short type label for the Outliner's type column. */
+function entityType(e: EntityData): string {
+  const main = e.components.find((c) => !['Collider', 'RigidBody', 'Health', 'Script', 'VisualScript'].includes(c.type)) ?? e.components[0];
+  return main ? (getComponentSchema(main.type)?.label ?? main.type) : 'Group';
+}
+
 export function createMenuItems(parent: string | null = null): MenuItem[] {
   const mode = editor().project?.settings.mode ?? '3d';
   const items: MenuItem[] = [];
@@ -146,6 +152,17 @@ export function Hierarchy() {
             >
               <Icon name={open ? 'ChevronDown' : 'ChevronRight'} size={13} />
             </button>
+            <button
+              className="tree-eye"
+              aria-label={e.enabled ? 'Hide' : 'Show'}
+              title={e.enabled ? 'Visible — click to disable' : 'Disabled — click to enable'}
+              onClick={(ev) => {
+                ev.stopPropagation();
+                updateEntity(e.id, (x) => void (x.enabled = !x.enabled), 'Toggle enabled');
+              }}
+            >
+              <Icon name={e.enabled ? 'Eye' : 'EyeOff'} size={12} />
+            </button>
             <Icon name={entityIcon(e)} size={14} className="tree-icon" />
             <span className="tree-name">
               {renaming === e.id ? (
@@ -169,9 +186,10 @@ export function Hierarchy() {
                 e.name
               )}
             </span>
-            {e.tags.slice(0, 2).map((t) => (
-              <span key={t} className="badge" style={{ fontSize: 10, padding: '0 5px' }}>{t}</span>
+            {e.tags.slice(0, 1).map((t) => (
+              <span key={t} className="tree-tag">{t}</span>
             ))}
+            <span className="tree-type">{entityType(e)}</span>
           </div>
         )}
         {renderedKids}
@@ -180,9 +198,11 @@ export function Hierarchy() {
   };
 
   return (
-    <div className="panel" style={{ height: '100%' }}>
+    <div className="panel outliner" style={{ height: '100%' }}>
       <div className="panel-head">
-        <span className="grow">Hierarchy</span>
+        <Icon name="ListTree" size={13} />
+        <span className="grow">Outliner</span>
+        <span className="faint" style={{ textTransform: 'none', fontWeight: 500 }}>{scene.entities.length}</span>
         <button className="btn sm ghost icon" title="Create" aria-label="Create entity" onClick={(e) => menu.open(e.currentTarget.getBoundingClientRect(), createMenuItems(), true)}>
           <Icon name="Plus" size={15} />
         </button>

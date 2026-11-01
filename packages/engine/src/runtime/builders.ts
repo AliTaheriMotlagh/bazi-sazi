@@ -143,15 +143,33 @@ function buildSprite(go: GameObject, c: ComponentData, rt: Runtime): Visual {
 
 function buildModel(go: GameObject, c: ComponentData, rt: Runtime): Visual {
   const holder = new THREE.Group();
+  holder.rotation.y = prop<number>(c, 'rotationOffset') * DEG2RAD;
   go.object3d.add(holder);
   let mixer: THREE.AnimationMixer | null = null;
   let clips: THREE.AnimationClip[] = [];
+  let current: THREE.AnimationAction | null = null;
+  let pending: string | null = null;
   let disposed = false;
-  const play = (name: string) => {
-    if (!mixer || clips.length === 0) return;
-    const clip = (name && THREE.AnimationClip.findByName(clips, name)) || clips[0];
-    mixer.stopAllAction();
-    mixer.clipAction(clip).reset().fadeIn(0.2).play();
+  const find = (name: string) => {
+    const n = name.toLowerCase();
+    return clips.find((x) => x.name.toLowerCase() === n) ?? clips.find((x) => x.name.toLowerCase().includes(n));
+  };
+  /** Cross-fade to a clip by (partial) name; unknown names are ignored. */
+  const play = (name: string, fallbackFirst = false) => {
+    if (!mixer) {
+      pending = name;
+      return;
+    }
+    const clip = (name && find(name)) || (fallbackFirst ? clips[0] : undefined);
+    if (!clip) return;
+    const next = mixer.clipAction(clip);
+    if (next === current) {
+      if (/attack|shoot|hit/i.test(clip.name)) next.reset().play();
+      return;
+    }
+    next.reset().setEffectiveWeight(1).fadeIn(0.15).play();
+    current?.fadeOut(0.15);
+    current = next;
   };
   rt.assets
     .model(prop<string>(c, 'model'))
@@ -163,6 +181,10 @@ function buildModel(go: GameObject, c: ComponentData, rt: Runtime): Visual {
         if ((o as THREE.Mesh).isMesh) {
           o.castShadow = shadow;
           o.receiveShadow = true;
+          o.userData.entityId = go.id;
+          // Clone materials so per-entity tints/flashes don't leak to every copy.
+          const m = o as THREE.Mesh;
+          m.material = Array.isArray(m.material) ? m.material.map((x) => x.clone()) : m.material.clone();
         }
       });
       holder.add(scene);
@@ -170,20 +192,79 @@ function buildModel(go: GameObject, c: ComponentData, rt: Runtime): Visual {
       if (clips.length) {
         mixer = new THREE.AnimationMixer(scene);
         mixer.timeScale = prop<number>(c, 'animationSpeed');
-        play(prop<string>(c, 'animation'));
+        play(pending ?? prop<string>(c, 'animation'), true);
+        pending = null;
       }
       rt.physics?.refreshAutoCollider(go);
+      rt.nav?.markDirty();
     })
     .catch((err) => rt.log({ level: 'error', message: `Model failed to load: ${err}`, entityId: go.id }));
   return {
     kind: 'Model',
     object: holder,
     update: (dt) => mixer?.update(dt),
-    playAnimation: play,
+    playAnimation: (name) => play(name),
+    setColor: (color) =>
+      holder.traverse((o) => {
+        const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (m && !Array.isArray(m) && m.color) m.color.set(color);
+      }),
     dispose() {
       disposed = true;
       holder.removeFromParent();
       mixer?.stopAllAction();
+    },
+  };
+}
+
+function buildVideo(go: GameObject, c: ComponentData, rt: Runtime): Visual {
+  const url = rt.assets.url(prop<string>(c, 'video'));
+  const video = document.createElement('video');
+  video.crossOrigin = 'anonymous';
+  video.playsInline = true;
+  video.muted = prop<boolean>(c, 'muted');
+  video.loop = prop<boolean>(c, 'loop');
+  video.preload = 'auto';
+  if (url) video.src = url;
+  const fullscreen = prop<string>(c, 'mode') === 'fullscreen' && rt.isPlaying && rt.hud;
+  let overlay: HTMLDivElement | null = null;
+  let mesh: THREE.Mesh | null = null;
+  let texture: THREE.VideoTexture | null = null;
+  if (fullscreen) {
+    overlay = document.createElement('div');
+    overlay.className = 'bz-video';
+    const skip = document.createElement('button');
+    skip.textContent = 'Skip ▸';
+    const end = () => {
+      overlay?.remove();
+      video.pause();
+      go.send('videoEnded');
+    };
+    skip.onclick = end;
+    video.onended = () => !video.loop && end();
+    overlay.append(video, skip);
+    rt.hud!.root.appendChild(overlay);
+  } else {
+    texture = new THREE.VideoTexture(video);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    mesh = new THREE.Mesh(new THREE.PlaneGeometry(prop<number>(c, 'width'), prop<number>(c, 'height')), new THREE.MeshBasicMaterial({ map: texture, toneMapped: false, side: THREE.DoubleSide }));
+    go.object3d.add(mesh);
+    video.onended = () => go.send('videoEnded');
+  }
+  if (rt.isPlaying && prop<boolean>(c, 'autoplay')) void video.play().catch(() => rt.log({ level: 'info', message: 'Video will start after the first click (browser autoplay rules).', entityId: go.id }));
+  else video.addEventListener('loadeddata', () => (video.currentTime = 0.1), { once: true });
+  return {
+    kind: 'Video',
+    object: mesh ?? undefined,
+    dispose() {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      overlay?.remove();
+      mesh?.removeFromParent();
+      mesh?.geometry.dispose();
+      (mesh?.material as THREE.Material | undefined)?.dispose();
+      texture?.dispose();
     },
   };
 }
@@ -346,6 +427,7 @@ const BUILDERS: Record<string, Builder> = {
   Light: buildLight,
   Camera: buildCamera,
   Particles: buildParticles,
+  Video: buildVideo,
 };
 
 /** Build all visuals for an entity's components. */

@@ -1,5 +1,7 @@
-import { Runtime, type ProjectData } from '@bazi/engine';
+import { normalizeProject, Runtime, type ProjectData } from '@bazi/engine';
+import { networkFor } from './api/client';
 import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+import { registerServiceWorker } from './pwa';
 import './styles.css';
 
 /**
@@ -74,7 +76,7 @@ async function main(): Promise<void> {
   try {
     const res = await fetch(`/api/games/${encodeURIComponent(slug)}/data`);
     if (!res.ok) return fail(res.status === 404 ? 'This game does not exist (yet).' : `Server error (${res.status}).`);
-    project = (await res.json()) as ProjectData;
+    project = normalizeProject((await res.json()) as ProjectData);
   } catch {
     return fail('Network error — check your connection.');
   }
@@ -84,7 +86,6 @@ async function main(): Promise<void> {
 
   const params = new URLSearchParams(location.search);
   const room = (params.get('room') ?? 'public').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || 'public';
-  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const canvas = $<HTMLCanvasElement>('canvas');
   let runtime: Runtime;
   try {
@@ -93,7 +94,8 @@ async function main(): Promise<void> {
       overlay: $('game'),
       project,
       mode: 'play',
-      network: project.settings.multiplayer.enabled ? { url: `${wsProto}//${location.host}/ws/play?game=${encodeURIComponent(slug)}&room=${room}`, name: playerName() } : null,
+      // Room server where available, peer-to-peer on serverless hosting.
+      network: project.settings.multiplayer.enabled ? await networkFor(slug, room, playerName()) : null,
     });
   } catch (err) {
     return fail(`This device could not start the game: ${(err as Error).message}`);
@@ -112,3 +114,4 @@ async function main(): Promise<void> {
 }
 
 void main();
+registerServiceWorker();

@@ -9,6 +9,7 @@ import {
   getComponentSchema,
   uid,
   type AssetData,
+  type AssetType,
   type ComponentData,
   type EntityData,
   type EntityInit,
@@ -236,6 +237,12 @@ export function addAsset(asset: Omit<AssetData, 'id'>): string {
   return id;
 }
 
+/** Use a Starter Content file in this project (reuses the asset if already added). */
+export function addSampleAsset(sample: { url: string; type: AssetType; name: string }): string {
+  const existing = editor().project!.assets.find((a) => a.url === sample.url);
+  return existing?.id ?? addAsset({ name: sample.name, type: sample.type, url: sample.url });
+}
+
 export function renameAsset(id: string, name: string): void {
   editor().apply('Rename asset', (d) => {
     const a = d.assets.find((x) => x.id === id);
@@ -352,6 +359,8 @@ export interface Preset {
 }
 
 const physicsBox = (): ComponentData[] => [comp('RigidBody'), comp('Collider')];
+/** Starter Content model as a project asset id. */
+const sampleModel = (file: string) => addSampleAsset({ url: `/samples/models/${file}.glb`, type: 'model', name: file });
 
 export const PRESETS: Preset[] = [
   { label: 'Empty', group: 'Basic', icon: 'Square', build: () => ({ name: 'Empty' }) },
@@ -371,6 +380,19 @@ export const PRESETS: Preset[] = [
   { label: 'Hazard', group: 'Gameplay', icon: 'Swords', build: () => ({ name: 'Hazard', tags: ['hazard'], components: [editor().project?.settings.mode === '3d' ? comp('Mesh', { shape: 'cone', color: '#ef476f' }) : comp('Sprite', { color: '#ef476f', height: 0.5 }), comp('Collider', { isTrigger: true }), comp('Damage')] }) },
   { label: 'Goal', group: 'Gameplay', icon: 'Flag', build: () => ({ name: 'Goal', components: [editor().project?.settings.mode === '3d' ? comp('Mesh', { shape: 'cylinder', color: '#06d6a0' }) : comp('Sprite', { color: '#06d6a0', width: 0.6, height: 1.6 }), comp('Collider', { isTrigger: true }), comp('Goal')] }) },
   { label: 'Spawner', group: 'Gameplay', icon: 'CopyPlus', build: () => ({ name: 'Spawner', components: [comp('Spawner')] }) },
+  // Strategy: units, defenses and economy (uses Starter Content models).
+  { label: 'Soldier (blue)', group: 'Strategy', icon: 'Swords', modes: ['3d'], build: () => ({ name: 'Soldier', components: [comp('Model', { model: sampleModel('knight_blue') }), comp('UnitAI', { team: 'blue', speed: 1.6, damage: 2 }), comp('Health', { max: 12, invulnerableTime: 0, showBar: true, damageNumbers: true })] }) },
+  { label: 'Enemy (red)', group: 'Strategy', icon: 'Swords', modes: ['3d'], build: () => ({ name: 'Enemy', rotation: [0, 180, 0], components: [comp('Model', { model: sampleModel('knight_red') }), comp('UnitAI', { team: 'red', speed: 1.6, damage: 2 }), comp('Health', { max: 12, invulnerableTime: 0, showBar: true, damageNumbers: true })] }) },
+  { label: 'Archer (blue)', group: 'Strategy', icon: 'Target', modes: ['3d'], build: () => ({ name: 'Archer', components: [comp('Model', { model: sampleModel('archer_blue') }), comp('UnitAI', { team: 'blue', speed: 1.7, attackRange: 4.5, projectile: 'arrow' }), comp('Health', { max: 7, invulnerableTime: 0, showBar: true, damageNumbers: true })] }) },
+  { label: 'Defense Tower', group: 'Strategy', icon: 'Castle', modes: ['3d'], build: () => ({ name: 'Tower', components: [comp('Model', { model: sampleModel('tower_blue'), animation: 'Idle' }), comp('Collider', { shape: 'cylinder', size: [1.8, 3, 1.8], offset: [0, 1.5, 0] }), comp('UnitAI', { team: 'blue', speed: 0, aggroRange: 7, attackRange: 6.5, damage: 2, attackCooldown: 0.8, projectile: 'arrow' }), comp('Health', { max: 40, invulnerableTime: 0, showBar: true })] }) },
+  { label: 'Gold Mine', group: 'Strategy', icon: 'Pickaxe', modes: ['3d'], build: () => ({ name: 'Gold Mine', components: [comp('Model', { model: sampleModel('gold_mine'), animation: 'Work' }), comp('Collider', { shape: 'box', size: [1.6, 1.5, 1.6], offset: [0, 0.75, 0] }), comp('ResourceGenerator')] }) },
+  { label: 'Card Deck (deploy)', group: 'Strategy', icon: 'Layers', build: () => ({ name: 'Card Deck', components: [comp('SpawnMenu')] }) },
+  { label: 'Build Menu (grid)', group: 'Strategy', icon: 'Hammer', build: () => ({ name: 'Build Menu', components: [comp('SpawnMenu', { mode: 'build', gridSize: 2, items: 'House:30:🏠', label: 'Gold', currency: 'gold', start: 100, max: 0, regen: 0 })] }) },
+  { label: 'Click-to-move Agent', group: 'Strategy', icon: 'Footprints', build: () => ({ name: 'Agent', position: [0, editor().project?.settings.mode === '3d' ? 0.5 : 0, 0], components: [editor().project?.settings.mode === '3d' ? comp('Mesh', { shape: 'capsule', color: '#38bdf8' }) : comp('Sprite', { color: '#38bdf8' }), comp('NavAgent')] }) },
+  { label: 'Route Builder (metro)', group: 'Strategy', icon: 'Route', build: () => ({ name: 'Routes', components: [comp('RouteBuilder')] }) },
+  { label: 'Station', group: 'Strategy', icon: 'TrainFront', build: () => ({ name: 'Station', tags: ['station'], components: [comp('Sprite', { color: '#ffffff', width: 0.9, height: 0.9 })] }) },
+  { label: 'Strategy Camera', group: 'Camera & Light', icon: 'Move3d', build: () => ({ name: 'RTS Camera', position: editor().project?.settings.mode === '3d' ? [0, 16, 14] : [0, 0, 10], rotation: editor().project?.settings.mode === '3d' ? [-50, 0, 0] : [0, 0, 0], components: [comp('Camera'), comp('StrategyCamera')] }) },
+  { label: 'Video Screen', group: 'Effects & UI', icon: 'Film', build: () => ({ name: 'Video', position: [0, editor().project?.settings.mode === '3d' ? 1.5 : 0, 0], components: [comp('Video', { video: addSampleAsset({ url: '/samples/video/aurora_loop.mp4', type: 'video', name: 'aurora_loop' }) })] }) },
   { label: 'Camera', group: 'Camera & Light', icon: 'Video', build: () => ({ name: 'Camera', position: [0, editor().project?.settings.mode === '3d' ? 3 : 0, 10], components: [comp('Camera', { primary: false })] }) },
   { label: 'Directional Light', group: 'Camera & Light', icon: 'Sun', modes: ['3d'], build: () => ({ name: 'Sun', position: [4, 8, 4], rotation: [-50, 30, 0], components: [comp('Light')] }) },
   { label: 'Point Light', group: 'Camera & Light', icon: 'Lightbulb', build: () => ({ name: 'Point Light', position: [0, 2, 0], components: [comp('Light', { kind: 'point', intensity: 2, distance: 10 })] }) },

@@ -4,6 +4,7 @@ import type { ComponentData, Vec3 } from '../types';
 import { DEG2RAD, damp, lerp } from '../util';
 import type { Behaviour, GameObject } from './GameObject';
 import type { Runtime } from './Runtime';
+import { TEAM_COLORS } from './strategy';
 
 /**
  * Built-in, no-code behaviours. Each is a factory returning the same
@@ -202,13 +203,47 @@ const Collectible: BehaviourFactory = (go, c, rt) => {
 const Health: BehaviourFactory = (go, c, rt) => {
   let invulnerable = 0;
   const spawn = new THREE.Vector3();
+  let bar: { group: THREE.Group; fill: THREE.Mesh; height: number; width: number; fitted: boolean } | null = null;
+  const max = () => prop<number>(c, 'max');
+  const teamColor = () => TEAM_COLORS[String(go.vars.team)] ?? '#4ade80';
   const show = () => {
     if (prop<boolean>(c, 'showInHud')) rt.hud?.set(`hp:${go.id}`, '❤'.repeat(Math.max(0, go.vars.health as number)), { anchor: 'top-right', color: '#ff5d73' });
+    if (bar) {
+      const ratio = Math.max(0, (go.vars.health as number) / max());
+      bar.fill.scale.x = Math.max(0.0001, ratio);
+      bar.group.visible = ratio < 1 || go.hasTag('building');
+    }
+  };
+  /** Bar size from the entity's bounds (models load async, so this may run again later). */
+  const measure = (): { width: number; height: number } | null => {
+    const box = new THREE.Box3().setFromObject(go.object3d, true);
+    if (box.isEmpty()) return null;
+    const size = box.getSize(new THREE.Vector3());
+    return {
+      width: Math.max(0.8, Math.min(3, Math.max(size.x, rt.mode2d ? 0 : size.z) * 1.1)),
+      height: rt.mode2d ? size.y / 2 + 0.35 : box.max.y - go.worldPosition().y + 0.45,
+    };
+  };
+  const makeBar = () => {
+    const m = measure();
+    const width = m?.width ?? 1;
+    const group = new THREE.Group();
+    const bg = new THREE.Mesh(new THREE.PlaneGeometry(width + 0.08, 0.2), new THREE.MeshBasicMaterial({ color: '#111318', transparent: true, opacity: 0.85, depthTest: false }));
+    const fillGeo = new THREE.PlaneGeometry(width, 0.13).translate(width / 2, 0, 0);
+    const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: teamColor(), depthTest: false }));
+    fill.position.set(-width / 2, 0, 0.001);
+    bg.renderOrder = 60;
+    fill.renderOrder = 61;
+    group.add(bg, fill);
+    rt.scene.add(group);
+    bar = { group, fill, height: m?.height ?? (rt.mode2d ? 0.9 : 2), width, fitted: !!m };
   };
   return {
     start() {
-      go.vars.health = prop<number>(c, 'max');
+      go.vars.health = max();
+      go.vars.maxHealth = max();
       spawn.copy(go.position);
+      if (prop<boolean>(c, 'showBar')) makeBar();
       show();
     },
     update(dt) {
@@ -217,36 +252,72 @@ const Health: BehaviourFactory = (go, c, rt) => {
         go.visible = invulnerable <= 0 || Math.floor(invulnerable * 12) % 2 === 0;
       }
     },
+    lateUpdate() {
+      if (!bar) return;
+      if (!bar.fitted) {
+        const m = measure();
+        if (m) {
+          bar.height = m.height;
+          bar.group.scale.x = m.width / bar.width;
+          bar.fitted = true;
+        }
+      }
+      const p = go.worldPosition(_v);
+      bar.group.position.set(p.x, p.y + bar.height, rt.mode2d ? p.z + 0.5 : p.z);
+      if (!rt.mode2d && rt.camera) bar.group.quaternion.copy(rt.camera.getWorldQuaternion(new THREE.Quaternion()));
+    },
     onMessage(name, data) {
       if (name === 'heal') {
-        go.vars.health = Math.min(prop<number>(c, 'max'), (go.vars.health as number) + ((data as { amount?: number })?.amount ?? 1));
+        go.vars.health = Math.min(max(), (go.vars.health as number) + ((data as { amount?: number })?.amount ?? 1));
         show();
         return;
       }
-      if (name !== 'damage' || invulnerable > 0) return;
-      go.vars.health = (go.vars.health as number) - ((data as { amount?: number })?.amount ?? 1);
+      if (name !== 'damage' || invulnerable > 0 || (go.vars.health as number) <= 0) return;
+      const amount = (data as { amount?: number })?.amount ?? 1;
+      go.vars.health = (go.vars.health as number) - amount;
       invulnerable = prop<number>(c, 'invulnerableTime');
-      rt.audio.sfx('hit', 0.6);
+      const p = go.worldPosition();
+      if (!rt.mode2d && bar) p.y += bar.height;
+      if (prop<boolean>(c, 'damageNumbers')) rt.fx.popText(p, `-${amount}`, '#ff5d73', 18);
+      rt.fx.flash(go, '#ff3b3b', 0.1);
+      if (!go.getComponent('UnitAI')) rt.audio.sfx('hit', 0.5);
       show();
       if ((go.vars.health as number) > 0) return;
       go.send('died');
+      rt.fx.burst(go.worldPosition(), go.vars.team ? teamColor() : '#ffd166', go.hasTag('building') ? 90 : 35, go.hasTag('building') ? 6 : 4);
+      if (go.hasTag('building')) {
+        rt.fx.shake(0.35, 0.35);
+        rt.audio.sfx('explosion', 0.6);
+      }
+      const reward = prop<string>(c, 'rewardVariable');
+      if (reward) {
+        const amt = prop<number>(c, 'rewardAmount');
+        rt.api.vars[reward] = Number(rt.api.vars[reward] ?? 0) + amt;
+        if (amt) rt.fx.popText(go.worldPosition(), `+${amt}`, '#ffd166', 18);
+      }
       switch (prop<string>(c, 'onDeath')) {
         case 'destroy':
           go.destroy();
           break;
         case 'respawn':
-          go.vars.health = prop<number>(c, 'max');
+          go.vars.health = max();
           go.setPosition(spawn.x, spawn.y, spawn.z);
           go.setVelocity(0, 0, 0);
           show();
           break;
         case 'game over':
           rt.api.gameOver();
+          go.destroy();
+          break;
+        case 'win':
+          rt.api.win();
+          go.destroy();
           break;
       }
     },
     onDestroy() {
       rt.hud?.remove(`hp:${go.id}`);
+      bar?.group.removeFromParent();
     },
   };
 };

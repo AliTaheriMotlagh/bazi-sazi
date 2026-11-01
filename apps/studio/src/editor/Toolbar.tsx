@@ -1,80 +1,91 @@
-import { Link } from 'react-router-dom';
-import { editor, useEditor, type GizmoTool } from '../store/editor';
-import { useUi } from '../store/ui';
+import { useEditor } from '../store/editor';
 import { Icon } from '../ui/Icon';
-import { useSession } from './session';
+import { useMenu } from '../ui/primitives';
+import { ACTIONS, actionById, formatKeys, togglePlay } from './actions';
+import { toMenuItem } from './MenuBar';
+import { editorHost, session } from './session';
 
-const TOOLS: [GizmoTool, string, string][] = [
-  ['translate', 'Move3d', 'Move (W)'],
-  ['rotate', 'Rotate3d', 'Rotate (E)'],
-  ['scale', 'Scale3d', 'Scale (R)'],
-];
-
-export function togglePlay(): void {
-  const { playState, set } = editor();
-  set({ playState: playState === 'edit' ? 'playing' : 'edit' });
+function Tool({ id, compact }: { id: string; compact?: boolean }) {
+  const a = actionById(id)!;
+  // Subscribe to the state checked()/enabled() read; a primitive key keeps zustand from looping.
+  useEditor((s) => `${s.tool}|${s.snap}|${s.past.length}|${s.future.length}|${s.selection.length}`);
+  const active = a.checked?.() ?? false;
+  return (
+    <button className={`btn sm ${compact === false ? '' : 'icon'} ${active ? 'active' : ''}`} disabled={a.enabled ? !a.enabled() : false} onClick={a.run} title={`${a.label}${a.keys ? ` (${formatKeys(a.keys[0])})` : ''}`} aria-label={a.label} aria-pressed={a.checked ? active : undefined}>
+      <Icon name={a.icon ?? 'Square'} size={15} />
+    </button>
+  );
 }
 
-export function Toolbar({ onSave, onPublish, onToggleLeft, onToggleRight, published }: { onSave(): void; onPublish(): void; onToggleLeft(): void; onToggleRight(): void; published: boolean }) {
-  const name = useEditor((s) => s.project?.name ?? '');
-  const saveState = useEditor((s) => s.saveState);
-  const canUndo = useEditor((s) => s.past.length > 0);
-  const canRedo = useEditor((s) => s.future.length > 0);
-  const tool = useEditor((s) => s.tool);
-  const snap = useEditor((s) => s.snap);
+/** Main toolbar (Unreal's level-editor toolbar): save, history, transform tools, play controls, add, publish. */
+export function Toolbar({ onToggleLeft, onToggleRight, published }: { onToggleLeft(): void; onToggleRight(): void; published: boolean }) {
   const playState = useEditor((s) => s.playState);
-  const undoLabel = useEditor((s) => s.past[s.past.length - 1]?.label);
-  const { theme, setTheme } = useUi();
+  const device = useEditor((s) => s.device);
   const playing = playState !== 'edit';
-  const step = () => {
-    useSession.getState().playRuntime?.step();
-  };
-
+  const menu = useMenu();
+  const deviceIcon = device === 'free' ? 'Maximize' : device === 'desktop' ? 'Monitor' : device === 'tablet' ? 'Tablet' : 'Smartphone';
   return (
-    <header className="toolbar">
-      <Link to="/" className="btn ghost icon" title="Back to projects" aria-label="Back to projects">
-        <Icon name="ArrowLeft" />
-      </Link>
-      <button className="btn ghost icon show-tablet" onClick={onToggleLeft} aria-label="Toggle hierarchy and assets">
+    <header className="toolbar" role="toolbar" aria-label="Editor toolbar">
+      <button className="btn ghost icon show-tablet" onClick={onToggleLeft} aria-label="Toggle outliner and place panel">
         <Icon name="Layers" />
       </button>
-      <span className={`save-dot ${saveState}`} title={saveState === 'saved' ? 'All changes saved' : saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Unsaved changes'} />
-      <span className="title truncate hide-phone">{name}</span>
       <div className="group hide-phone">
-        <button className="btn sm icon" disabled={!canUndo} onClick={() => editor().undo()} title={`Undo ${undoLabel ?? ''} (Ctrl+Z)`} aria-label="Undo"><Icon name="Undo2" size={15} /></button>
-        <button className="btn sm icon" disabled={!canRedo} onClick={() => editor().redo()} title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><Icon name="Redo2" size={15} /></button>
+        <Tool id="file.save" />
+        <Tool id="edit.undo" />
+        <Tool id="edit.redo" />
       </div>
       <div className="group">
-        {TOOLS.map(([id, icon, label]) => (
-          <button key={id} className={`btn sm icon ${tool === id ? 'active' : ''}`} onClick={() => editor().set({ tool: id })} title={label} aria-label={label} aria-pressed={tool === id}>
-            <Icon name={icon} size={15} />
-          </button>
-        ))}
-        <button className={`btn sm icon ${snap ? 'active' : ''}`} onClick={() => editor().set({ snap: !snap })} title="Snap to grid" aria-label="Snap" aria-pressed={snap}>
-          <Icon name="Magnet" size={15} />
-        </button>
+        <Tool id="tool.move" />
+        <Tool id="tool.rotate" />
+        <Tool id="tool.scale" />
+        <Tool id="tool.snap" />
       </div>
+      <button
+        className="btn sm hide-phone"
+        onClick={(e) =>
+          menu.open(
+            e.currentTarget.getBoundingClientRect(),
+            ACTIONS.filter((a) => a.group === 'Create' && (!a.enabled || a.enabled())).map(toMenuItem),
+            true,
+          )
+        }
+      >
+        <Icon name="Plus" size={15} /> Add <Icon name="ChevronDown" size={12} />
+      </button>
       <span className="spacer" />
-      <div className="group">
-        <button className={`btn sm play-btn ${playing ? 'playing' : ''}`} onClick={togglePlay} title={playing ? 'Stop (Ctrl+P)' : 'Play (Ctrl+P)'}>
+      <div className="group play-group">
+        <button className={`btn sm play-btn ${playing ? 'playing' : ''}`} onClick={togglePlay} title={`${playing ? 'Stop' : 'Play'} (${formatKeys('Mod+P')})`}>
           <Icon name={playing ? 'Square' : 'Play'} size={15} /> <span className="hide-phone">{playing ? 'Stop' : 'Play'}</span>
         </button>
-        {playing && (
-          <>
-            <button className={`btn sm icon ${playState === 'paused' ? 'active' : ''}`} onClick={() => editor().set({ playState: playState === 'paused' ? 'playing' : 'paused' })} title="Pause" aria-label="Pause"><Icon name="Pause" size={15} /></button>
-            <button className="btn sm icon" disabled={playState !== 'paused'} onClick={step} title="Step one frame" aria-label="Step"><Icon name="StepForward" size={15} /></button>
-          </>
-        )}
+        <button className={`btn sm icon ${playState === 'paused' ? 'active' : ''}`} disabled={!playing} onClick={actionById('build.pause')!.run} title="Pause" aria-label="Pause">
+          <Icon name="Pause" size={15} />
+        </button>
+        <button className="btn sm icon" disabled={playState !== 'paused'} onClick={() => session().playRuntime?.step()} title="Step one frame" aria-label="Step one frame">
+          <Icon name="StepForward" size={15} />
+        </button>
+        <button
+          className="btn sm icon"
+          title="Preview device"
+          aria-label="Preview device"
+          onClick={(e) => menu.open(e.currentTarget.getBoundingClientRect(), ACTIONS.filter((a) => a.id.startsWith('device.') || a.id === 'build.colliders').map(toMenuItem))}
+        >
+          <Icon name={deviceIcon} size={15} />
+        </button>
       </div>
       <span className="spacer" />
-      <button className="btn ghost icon hide-phone" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label="Toggle theme"><Icon name={theme === 'dark' ? 'SunMedium' : 'Moon'} /></button>
-      <button className="btn icon hide-phone" onClick={onSave} title="Save (Ctrl+S)" aria-label="Save"><Icon name="Save" size={15} /></button>
-      <button className="btn primary" onClick={onPublish} title="Publish & share">
-        <Icon name="Rocket" size={15} /> <span className="hide-phone">{published ? 'Update' : 'Publish'}</span>
+      <button className="btn sm ghost hide-phone" onClick={actionById('window.palette')!.run} title={`Command palette (${formatKeys('Mod+K')})`}>
+        <Icon name="Search" size={14} /> <span className="kbd">{formatKeys('Mod+K')}</span>
       </button>
-      <button className="btn ghost icon show-tablet hide-phone" onClick={onToggleRight} aria-label="Toggle inspector">
+      <button className="btn sm hide-phone" onClick={actionById('window.ai')!.run} title="AI assistant">
+        <Icon name="Sparkles" size={14} /> AI
+      </button>
+      <button className="btn sm primary" onClick={() => editorHost.openPublish()} title="Publish & share">
+        <Icon name="Rocket" size={14} /> <span className="hide-phone">{published ? 'Update' : 'Publish'}</span>
+      </button>
+      <button className="btn ghost icon show-tablet hide-phone" onClick={onToggleRight} aria-label="Toggle details">
         <Icon name="SlidersHorizontal" />
       </button>
+      {menu.element}
     </header>
   );
 }
