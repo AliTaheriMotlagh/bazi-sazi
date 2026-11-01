@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, embedUrl, gameUrl, type GameInfo } from '../api/client';
 import { useAuth } from '../store/auth';
 import { toast } from '../store/ui';
@@ -9,6 +9,7 @@ import { SiteNav, timeAgo } from './SiteNav';
 
 export function PlayPage() {
   const { slug = '' } = useParams();
+  const navigate = useNavigate();
   const [game, setGame] = useState<GameInfo | null>(null);
   const [error, setError] = useState('');
   const [room, setRoom] = useState('public');
@@ -80,6 +81,21 @@ export function PlayPage() {
               <button className={`btn ${game.liked ? 'active' : ''}`} onClick={like}>
                 <Icon name="Heart" size={15} /> {game.likes}
               </button>
+              <button
+                className="btn"
+                title="Copy this game into your projects and change it"
+                onClick={async () => {
+                  try {
+                    await useAuth.getState().ensure();
+                    const r = await api.remix(slug);
+                    navigate(`/edit/${r.id}`);
+                  } catch (err) {
+                    toast((err as Error).message, 'error');
+                  }
+                }}
+              >
+                <Icon name="CopyPlus" size={15} /> Remix
+              </button>
               <button className="btn" onClick={share}>
                 <Icon name="Share2" size={15} /> Share
               </button>
@@ -96,6 +112,24 @@ export function PlayPage() {
                 <span>Play with friends in a private room:</span>
                 <input className="input" style={{ width: 160 }} value={room} onChange={(e) => setRoom(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))} aria-label="Room code" />
                 <button className="btn primary sm" onClick={() => setActiveRoom(room || 'public')}>Join room</button>
+                <button
+                  className="btn sm"
+                  title="Join the busiest room that still has space, or start a new one"
+                  onClick={async () => {
+                    let code = '';
+                    try {
+                      const open = (await api.rooms(slug)).rooms.filter((r) => r.players > 0 && r.players < r.max).sort((a, b) => b.players - a.players);
+                      code = open[0]?.name ?? '';
+                    } catch {
+                      /* serverless/P2P hosting has no room list: fall through to a fresh room */
+                    }
+                    code ||= `match-${Math.random().toString(36).slice(2, 7)}`;
+                    setRoom(code);
+                    setActiveRoom(code);
+                  }}
+                >
+                  <Icon name="Users" size={13} /> Quick match
+                </button>
                 <span className="faint">Current: {activeRoom}</span>
               </div>
             )}

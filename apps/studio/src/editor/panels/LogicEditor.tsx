@@ -47,15 +47,15 @@ function InlineValue({ pin, value, onChange }: { pin: PinDef; value: unknown; on
   const v = value ?? pin.default;
   if (pin.options)
     return (
-      <select className="select nodrag" value={String(v)} onChange={(e) => onChange(e.target.value)}>
+      <select className="select nodrag" aria-label={pin.label || pin.id} value={String(v)} onChange={(e) => onChange(e.target.value)}>
         {pin.options.map((o) => <option key={o}>{o}</option>)}
       </select>
     );
-  if (pin.kind === 'boolean') return <input className="nodrag" type="checkbox" checked={!!v} onChange={(e) => onChange(e.target.checked)} />;
+  if (pin.kind === 'boolean') return <input className="nodrag" type="checkbox" aria-label={pin.label || pin.id} checked={!!v} onChange={(e) => onChange(e.target.checked)} />;
   if (pin.kind === 'number')
-    return <input className="input nodrag" type="number" step="any" value={Number(v)} onChange={(e) => onChange(e.target.value === '' ? 0 : Number(e.target.value))} style={{ width: 70 }} />;
-  if (pin.kind === 'entity') return <input className="input nodrag" placeholder="self" value={String(v ?? '')} onChange={(e) => onChange(e.target.value)} />;
-  return <input className="input nodrag" value={String(v ?? '')} onChange={(e) => onChange(e.target.value)} />;
+    return <input className="input nodrag" type="number" step="any" aria-label={pin.label || pin.id} value={Number(v)} onChange={(e) => onChange(e.target.value === '' ? 0 : Number(e.target.value))} style={{ width: 70 }} />;
+  if (pin.kind === 'entity') return <input className="input nodrag" placeholder="self" aria-label={pin.label || pin.id} value={String(v ?? '')} onChange={(e) => onChange(e.target.value)} />;
+  return <input className="input nodrag" aria-label={pin.label || pin.id} value={String(v ?? '')} onChange={(e) => onChange(e.target.value)} />;
 }
 
 const GraphNode = memo(function GraphNode({ id, data, selected }: NodeProps<Node<NodeData>>) {
@@ -67,7 +67,7 @@ const GraphNode = memo(function GraphNode({ id, data, selected }: NodeProps<Node
       if (n) n.data[key] = value;
     }, 'Edit node', `${id}:${key}`);
   return (
-    <div className={`vs-node ${selected ? 'selected' : ''}`} title={def.description}>
+    <div className={`vs-node ${selected ? 'selected' : ''}`} title={def.description} role="group" aria-label={`${def.title} node. ${def.description}`}>
       <div className="vs-node-head" style={{ background: CATEGORY_COLOR[def.category] }}>
         {def.event && <Icon name="Zap" size={12} />}
         {def.title}
@@ -81,7 +81,7 @@ const GraphNode = memo(function GraphNode({ id, data, selected }: NodeProps<Node
         ))}
         {def.inputs.map((pin) => (
           <div className="vs-pin" key={pin.id}>
-            <Handle type="target" position={Position.Left} id={pin.id} className={pin.kind === 'exec' ? 'exec' : 'data'} style={{ background: PIN_COLOR[pin.kind] }} />
+            <Handle type="target" position={Position.Left} id={pin.id} aria-label={`${def.title} input ${pin.label || pin.id}`} className={pin.kind === 'exec' ? 'exec' : 'data'} style={{ background: PIN_COLOR[pin.kind] }} />
             <span>{pin.label || (pin.kind === 'exec' ? '▶' : pin.id)}</span>
             {pin.kind !== 'exec' && !data.connected.includes(pin.id) && <InlineValue pin={pin} value={data.values[pin.id]} onChange={(v) => set(pin.id, v)} />}
           </div>
@@ -89,7 +89,7 @@ const GraphNode = memo(function GraphNode({ id, data, selected }: NodeProps<Node
         {def.outputs.map((pin) => (
           <div className="vs-pin out" key={pin.id}>
             <span>{pin.label || (pin.kind === 'exec' ? '▶' : pin.id)}</span>
-            <Handle type="source" position={Position.Right} id={pin.id} className={pin.kind === 'exec' ? 'exec' : 'data'} style={{ background: PIN_COLOR[pin.kind] }} />
+            <Handle type="source" position={Position.Right} id={pin.id} aria-label={`${def.title} output ${pin.label || pin.id}`} className={pin.kind === 'exec' ? 'exec' : 'data'} style={{ background: PIN_COLOR[pin.kind] }} />
           </div>
         ))}
       </div>
@@ -98,6 +98,7 @@ const GraphNode = memo(function GraphNode({ id, data, selected }: NodeProps<Node
 });
 
 const nodeTypes = { graph: GraphNode };
+const reduceMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function pinOf(type: string, id: string, dir: 'in' | 'out'): PinDef | undefined {
   const def = getNodeDef(type);
@@ -135,7 +136,7 @@ function Canvas({ graph }: { graph: GraphData }) {
         const src = graph.nodes.find((n) => n.id === e.source);
         const pin = src && pinOf(src.type, e.sourceHandle, 'out');
         const exec = pin?.kind === 'exec';
-        return { id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle, animated: exec, style: { stroke: PIN_COLOR[pin?.kind ?? 'any'], strokeWidth: exec ? 2.5 : 2 } };
+        return { id: e.id, source: e.source, sourceHandle: e.sourceHandle, target: e.target, targetHandle: e.targetHandle, animated: exec && !reduceMotion(), style: { stroke: PIN_COLOR[pin?.kind ?? 'any'], strokeWidth: exec ? 2.5 : 2 } };
       }),
     [graph],
   );
@@ -216,6 +217,64 @@ function Canvas({ graph }: { graph: GraphData }) {
   );
 }
 
+/** Keyboard- and screen-reader-friendly alternative to dragging wires: list, add and remove connections. */
+function Connections({ graph }: { graph: GraphData }) {
+  const [open, setOpen] = useState(false);
+  const label = (nodeId: string) => getNodeDef(graph.nodes.find((n) => n.id === nodeId)?.type ?? '')?.title ?? nodeId;
+  const outs = graph.nodes.flatMap((n) => (getNodeDef(n.type)?.outputs ?? []).map((p) => ({ key: `${n.id}|${p.id}`, text: `${label(n.id)} → ${p.label || p.id}` })));
+  const ins = graph.nodes.flatMap((n) => (getNodeDef(n.type)?.inputs ?? []).map((p) => ({ key: `${n.id}|${p.id}`, text: `${label(n.id)} ← ${p.label || p.id}` })));
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  return (
+    <div className="vs-connections">
+      <button className="btn sm" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name="Workflow" size={13} /> Connections ({graph.edges.length})
+      </button>
+      {open && (
+        <div className="vs-connections-panel" role="region" aria-label="Connections">
+          <ul>
+            {graph.edges.map((e) => (
+              <li key={e.id} className="row">
+                <span className="grow">{label(e.source)} · {e.sourceHandle} → {label(e.target)} · {e.targetHandle}</span>
+                <button className="btn sm ghost" aria-label={`Remove connection ${label(e.source)} to ${label(e.target)}`} onClick={() => updateGraph(graph.id, (g) => void (g.edges = g.edges.filter((x) => x.id !== e.id)), 'Disconnect')}>Remove</button>
+              </li>
+            ))}
+            {!graph.edges.length && <li className="faint">No connections yet.</li>}
+          </ul>
+          <div className="row" style={{ gap: 4, flexWrap: 'wrap' }}>
+            <select className="select" aria-label="From output" value={from} onChange={(e) => setFrom(e.target.value)}>
+              <option value="">From output…</option>
+              {outs.map((o) => <option key={o.key} value={o.key}>{o.text}</option>)}
+            </select>
+            <select className="select" aria-label="To input" value={to} onChange={(e) => setTo(e.target.value)}>
+              <option value="">To input…</option>
+              {ins.map((o) => <option key={o.key} value={o.key}>{o.text}</option>)}
+            </select>
+            <button
+              className="btn sm primary"
+              disabled={!from || !to || from.split('|')[0] === to.split('|')[0]}
+              onClick={() => {
+                const [source, sourceHandle] = from.split('|');
+                const [target, targetHandle] = to.split('|');
+                const s = graph.nodes.find((n) => n.id === source);
+                const t = graph.nodes.find((n) => n.id === target);
+                if (!s || !t || !compatible(pinOf(s.type, sourceHandle, 'out'), pinOf(t.type, targetHandle, 'in'))) return;
+                updateGraph(graph.id, (g) => {
+                  const pin = pinOf(t.type, targetHandle, 'in');
+                  if (pin?.kind !== 'exec') g.edges = g.edges.filter((x) => !(x.target === target && x.targetHandle === targetHandle));
+                  g.edges.push({ id: uid('ed_'), source, sourceHandle, target, targetHandle });
+                }, 'Connect');
+              }}
+            >
+              Connect
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 let addFromPalette: ((type: string) => void) | null = null;
 function PaletteAdd({ onAdd }: { onAdd(type: string): void }) {
   useEffect(() => {
@@ -276,6 +335,7 @@ export default function LogicEditor({ id }: { id: string }) {
       </div>
       <div className="vs-wrap" style={{ flex: 1, minHeight: 0 }}>
         <Palette />
+        <Connections graph={graph} />
         <ReactFlowProvider>
           <Canvas key={graph.id} graph={graph} />
         </ReactFlowProvider>

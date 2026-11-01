@@ -21,6 +21,8 @@ import { Hierarchy } from './panels/Hierarchy';
 import { Inspector } from './panels/Inspector';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { PlacePanel } from './PlacePanel';
+import { HistoryDialog } from './HistoryDialog';
+import { LibraryDialog } from './LibraryDialog';
 import { PublishDialog } from './PublishDialog';
 import { editorHost, useSession, viewportBridge } from './session';
 import { StatusBar } from './StatusBar';
@@ -144,7 +146,7 @@ export default function EditorPage() {
   const playState = useEditor((s) => s.playState);
   const layout = useEditor((s) => s.layout);
   const [published, setPublished] = useState<{ slug: string; title: string; description: string } | null>(null);
-  const [dialog, setDialog] = useState<null | 'publish' | 'shortcuts' | 'welcome'>(null);
+  const [dialog, setDialog] = useState<null | 'publish' | 'shortcuts' | 'welcome' | 'history' | 'library'>(null);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
   const [phoneView, setPhoneView] = useState<PhoneView>('scene');
@@ -248,6 +250,8 @@ export default function EditorPage() {
     editorHost.openPublish = () => setDialog('publish');
     editorHost.openShortcuts = () => setDialog('shortcuts');
     editorHost.openWelcome = () => setDialog('welcome');
+    editorHost.openHistory = () => setDialog('history');
+    editorHost.openLibrary = () => setDialog('library');
   }, [save]);
 
   // ── autosave
@@ -383,6 +387,8 @@ export default function EditorPage() {
       )}
       <CommandPalette />
       <Tutorial published={!!published} />
+      {dialog === 'history' && <HistoryDialog onClose={() => setDialog(null)} save={save} />}
+      {dialog === 'library' && <LibraryDialog onClose={() => setDialog(null)} />}
       {dialog === 'publish' && <PublishDialog published={published} onPublished={setPublished} onClose={() => setDialog(null)} save={() => save(true)} />}
       {dialog === 'shortcuts' && <ShortcutsDialog onClose={() => setDialog(null)} />}
       {dialog === 'welcome' && <WelcomeDialog onClose={() => setDialog(null)} />}

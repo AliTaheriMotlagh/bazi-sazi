@@ -52,6 +52,27 @@ const MIGRATIONS = [
      size INTEGER NOT NULL,
      created_at INTEGER NOT NULL
    );`,
+  `CREATE TABLE IF NOT EXISTS project_versions (
+     id TEXT PRIMARY KEY,
+     project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+     label TEXT NOT NULL DEFAULT '',
+     name TEXT NOT NULL,
+     data TEXT NOT NULL,
+     auto INTEGER NOT NULL DEFAULT 1,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS versions_project ON project_versions(project_id, created_at DESC);
+   CREATE TABLE IF NOT EXISTS shared_prefabs (
+     id TEXT PRIMARY KEY,
+     owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     name TEXT NOT NULL,
+     description TEXT NOT NULL DEFAULT '',
+     mode TEXT NOT NULL,
+     data TEXT NOT NULL,
+     downloads INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX IF NOT EXISTS prefabs_recent ON shared_prefabs(created_at DESC);`,
 ];
 
 type Value = string | number | null;

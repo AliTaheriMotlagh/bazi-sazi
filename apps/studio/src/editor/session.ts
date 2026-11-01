@@ -47,11 +47,15 @@ export const editorHost: {
   openPublish: () => void;
   openShortcuts: () => void;
   openWelcome: () => void;
+  openHistory: () => void;
+  openLibrary: () => void;
   uploadFiles: () => void;
 } = {
   save: async () => false,
   openPublish: () => {},
   openShortcuts: () => {},
   openWelcome: () => {},
+  openHistory: () => {},
+  openLibrary: () => {},
   uploadFiles: () => {},
 };

@@ -1,4 +1,4 @@
-import type { ProjectData } from '@bazi/engine/core';
+import type { AssetData, PrefabData, ProjectData } from '@bazi/engine/core';
 
 const TOKEN_KEY = 'bz.token';
 
@@ -82,6 +82,29 @@ export interface ProjectRecord {
   updatedAt: number;
   game: { slug: string; title: string; description: string; updated_at: number } | null;
 }
+export interface VersionInfo {
+  id: string;
+  label: string;
+  name: string;
+  auto: boolean;
+  createdAt: number;
+  size: number;
+}
+export interface SharedPrefabInfo {
+  id: string;
+  name: string;
+  description: string;
+  mode: '2d' | '3d';
+  downloads: number;
+  createdAt: number;
+  author: string;
+}
+export interface SharedPrefab {
+  name: string;
+  mode: '2d' | '3d';
+  prefab: PrefabData;
+  assets: AssetData[];
+}
 export interface AiModel {
   id: string;
   name: string;
@@ -108,6 +131,15 @@ export const api = {
   publish: (id: string, body: { slug: string; title: string; description: string; thumbnail?: string }) => post<{ ok: true; slug: string }>(`/api/projects/${id}/publish`, body),
   unpublish: (id: string) => request<{ ok: true }>(`/api/projects/${id}/publish`, { method: 'DELETE' }),
   slugAvailable: (slug: string, project: string) => request<{ available: boolean; reason?: string }>(`/api/slug-available?slug=${encodeURIComponent(slug)}&project=${project}`),
+
+  versions: (id: string) => request<{ versions: VersionInfo[] }>(`/api/projects/${id}/versions`),
+  saveVersion: (id: string, label: string) => post<{ ok: true }>(`/api/projects/${id}/versions`, { label }),
+  restoreVersion: (id: string, versionId: string) => post<{ ok: true; updatedAt: number; data: ProjectData }>(`/api/projects/${id}/versions/${versionId}/restore`),
+  remix: (slug: string) => post<{ id: string }>(`/api/games/${slug}/remix`),
+  prefabs: (q = '', mode = '') => request<{ prefabs: SharedPrefabInfo[] }>(`/api/prefabs?q=${encodeURIComponent(q)}&mode=${mode}`),
+  sharePrefab: (body: { name: string; description: string; mode: '2d' | '3d'; data: { prefab: PrefabData; assets: AssetData[] } }) => post<{ id: string }>('/api/prefabs', body),
+  sharedPrefab: (id: string) => request<SharedPrefab>(`/api/prefabs/${id}`),
+  deleteSharedPrefab: (id: string) => request<{ ok: true }>(`/api/prefabs/${id}`, { method: 'DELETE' }),
 
   games: (q: { q?: string; sort?: string; mode?: string; multiplayer?: boolean }) => {
     const p = new URLSearchParams();

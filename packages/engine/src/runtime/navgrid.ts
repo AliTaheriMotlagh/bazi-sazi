@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { prop } from '../components/registry';
+import { decodeHeights, levelToHeight, flatHeights } from '../project/terrain';
 import type { GameObject } from './GameObject';
 
 const MAX_CELLS = 256 * 256;
@@ -219,6 +220,37 @@ export class GridPathfinder {
 }
 
 const _box = new THREE.Box3();
+/** Steepest slope (degrees) agents can walk on terrain. */
+const MAX_SLOPE_DEG = 40;
+
+/** Height sampler for a Terrain entity (world space; ignores rotation). */
+function terrainSampler(go: GameObject): { bounds: [number, number, number, number]; height(x: number, z: number): number } | null {
+  const c = go.getComponent('Terrain');
+  if (!c) return null;
+  const res = Math.max(8, Math.min(128, Math.round(prop<number>(c, 'resolution'))));
+  const size = prop<number>(c, 'size');
+  const h = prop<number>(c, 'height');
+  const levels = decodeHeights(prop<string>(c, 'heights') || flatHeights(res), res);
+  const p = go.object3d.getWorldPosition(new THREE.Vector3());
+  const sc = go.object3d.getWorldScale(new THREE.Vector3());
+  const half = (size * sc.x) / 2;
+  const halfZ = (size * sc.z) / 2;
+  return {
+    bounds: [p.x - half, p.z - halfZ, p.x + half, p.z + halfZ],
+    height(x, z) {
+      const u = Math.max(0, Math.min(1, (x - p.x) / (size * sc.x) + 0.5)) * res;
+      const v = Math.max(0, Math.min(1, (z - p.z) / (size * sc.z) + 0.5)) * res;
+      const i0 = Math.min(res - 1, Math.floor(u));
+      const j0 = Math.min(res - 1, Math.floor(v));
+      const fu = u - i0;
+      const fv = v - j0;
+      const n = res + 1;
+      const a = levels[j0 * n + i0] * (1 - fu) + levels[j0 * n + i0 + 1] * fu;
+      const b = levels[(j0 + 1) * n + i0] * (1 - fu) + levels[(j0 + 1) * n + i0 + 1] * fu;
+      return p.y + levelToHeight(a * (1 - fv) + b * fv, h) * sc.y;
+    },
+  };
+}
 
 /**
  * Builds a pathfinding grid from the live scene: static, solid colliders
@@ -261,6 +293,7 @@ export class NavGrid {
 
   private rebuild(): GridPathfinder {
     const rects: [number, number, number, number][] = [];
+    const terrains: NonNullable<ReturnType<typeof terrainSampler>>[] = [];
     const bounds: NavBounds = { minX: -20, minY: -20, maxX: 20, maxY: 20 };
     for (const go of this.entities()) {
       if (!go.alive) continue;
@@ -271,6 +304,14 @@ export class NavGrid {
         bounds.minY = Math.min(bounds.minY, y0 - 2);
         bounds.maxX = Math.max(bounds.maxX, x1 + 2);
         bounds.maxY = Math.max(bounds.maxY, y1 + 2);
+      }
+      const t = this.mode2d ? null : terrainSampler(go);
+      if (t) {
+        terrains.push(t);
+        bounds.minX = Math.min(bounds.minX, t.bounds[0]);
+        bounds.minY = Math.min(bounds.minY, t.bounds[1]);
+        bounds.maxX = Math.max(bounds.maxX, t.bounds[2]);
+        bounds.maxY = Math.max(bounds.maxY, t.bounds[3]);
       }
       if (!this.isObstacle(go)) continue;
       const rect = this.obstacleRect(go);
@@ -283,6 +324,18 @@ export class NavGrid {
     // Large footprints are floors/arenas, never obstacles.
     const area = (bounds.maxX - bounds.minX) * (bounds.maxY - bounds.minY);
     for (const r of rects) if ((r[2] - r[0]) * (r[3] - r[1]) < area * 0.25) grid.blockRect(...r, this.cellSize * 0.3);
+    // Terrain: cells steeper than MAX_SLOPE_DEG are not walkable.
+    const maxRise = Math.tan((MAX_SLOPE_DEG * Math.PI) / 180);
+    for (const t of terrains) {
+      for (let r = 0; r < grid.rows; r++)
+        for (let c = 0; c < grid.cols; c++) {
+          const [x, z] = grid.center(c, r);
+          if (x < t.bounds[0] || x > t.bounds[2] || z < t.bounds[1] || z > t.bounds[3]) continue;
+          const d = grid.cellSize / 2;
+          const slope = Math.max(Math.abs(t.height(x + d, z) - t.height(x - d, z)), Math.abs(t.height(x, z + d) - t.height(x, z - d))) / grid.cellSize;
+          if (slope > maxRise) grid.blocked[r * grid.cols + c] = 1;
+        }
+    }
     this.dirty = false;
     return grid;
   }

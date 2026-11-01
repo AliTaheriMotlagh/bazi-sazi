@@ -163,14 +163,18 @@ The assistant talks to any OpenAI-compatible endpoint, by default OpenRouter:
 - **Offline**: every save is written to IndexedDB first and synced to the server when reachable (status bar shows "Saved on this device"). Existing projects open and edit offline; conflicts with another device prompt before overwriting.
 - **Export**: File → Export game → single HTML (opens by double-click) or ZIP for static hosting. Multiplayer is disabled in exports. `npm run build` also builds the standalone player (`npm run build:standalone`).
 
+- **Version history**: File → Version history. Automatic snapshots (every 10 min while saving) plus named versions; restoring keeps the current state as a version.
+- **Prefab library & remix**: File → Prefab library to share/import prefabs (assets included). Any published game has a **Remix** button that copies it into your projects.
+- **Custom shaders**: add the *Custom Shader* component to a Mesh — presets (hologram, toon, water, dissolve…) or your own GLSL.
+- **Navigation on terrain**: the nav grid blocks slopes steeper than 40°.
+- **Quick match**: busiest open room, or a fresh one.
+
 ## Roadmap — not built yet
 
-Being honest about the gap to Unity/Unreal/Godot. These would be the next most valuable additions:
+See [docs/GAP_ANALYSIS.md](docs/GAP_ANALYSIS.md) for the full list. The big ones:
 
-- Navigation meshes for free-form 3D levels (grid pathfinding already exists)
-- Shader graph / custom materials; WebGPU renderer path
-- Real-time collaborative editing (multiple people in one project) and project version history
-- Server-authoritative multiplayer option (currently host-authoritative relay) and matchmaking
-- Asset store / sharing prefabs between projects, remixing published games
-- Native app wrappers (Electron/Capacitor); creating brand-new projects and uploading assets while offline
-- Accessibility audit of the node editor and localization (RTL/Persian UI)
+- Real-time collaborative editing
+- Server-authoritative multiplayer
+- WebGPU renderer and a node-based shader graph
+- True navigation meshes
+- Native app wrappers; creating projects / uploading assets while offline

@@ -1,4 +1,5 @@
 import type { AssetType, ComponentData, GameMode } from '../types';
+import { DEFAULT_CUSTOM_SHADER, SHADER_PRESET_NAMES } from '../runtime/shaders';
 
 /**
  * Component schemas drive everything that is component-specific outside the
@@ -98,6 +99,22 @@ export const COMPONENTS: ComponentSchema[] = [
       f('wireframe', 'Wireframe', 'boolean', false),
       f('castShadow', 'Cast shadows', 'boolean', true),
       f('receiveShadow', 'Receive shadows', 'boolean', true),
+    ],
+  },
+  {
+    type: 'Shader',
+    label: 'Custom Shader',
+    category: 'Rendering',
+    icon: 'WandSparkles',
+    description: 'Replaces the Mesh material with an effect: hologram, toon, water, dissolve… or write your own GLSL (choose "custom").',
+    modes: ['3d'],
+    fields: [
+      f('preset', 'Effect', 'select', 'hologram', { options: SHADER_PRESET_NAMES }),
+      f('color', 'Color', 'color', '#38bdf8'),
+      f('color2', 'Second color', 'color', '#a78bfa'),
+      f('speed', 'Speed', 'number', 1, { step: 0.1 }),
+      f('intensity', 'Intensity', 'number', 1, { min: 0, step: 0.1 }),
+      f('code', 'GLSL', 'text', DEFAULT_CUSTOM_SHADER, { showIf: (p) => p.preset === 'custom', help: 'Body of vec4 shade(uv, normal, viewDir, worldPos). GLSL errors appear in the browser console (F12).' }),
     ],
   },
   {

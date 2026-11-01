@@ -21,7 +21,7 @@ import { editor, useEditor } from '../../store/editor';
 import { toast } from '../../store/ui';
 import { Icon } from '../../ui/Icon';
 import { Switch, useMenu, type MenuItem } from '../../ui/primitives';
-import { useSession } from '../session';
+import { editorHost, useSession } from '../session';
 import { FieldEditor, TagsInput, Vec3Input } from './Fields';
 import { TerrainTools, TilePainter } from './LevelTools';
 
@@ -198,6 +198,7 @@ function AssetInspector() {
           <div className="faint" style={{ fontSize: 12 }}>To edit a prefab: place it, change it, then right-click → “Save as prefab” with the same name.</div>
           <div className="row">
             <button className="btn primary grow" onClick={() => instantiatePrefab(prefab.id)}><Icon name="Plus" size={14} /> Place in scene</button>
+            <button className="btn" title="Share to the prefab library" onClick={() => editorHost.openLibrary()}><Icon name="Share2" size={14} /></button>
             <button className="btn danger" onClick={() => (deletePrefab(prefab.id), editor().set({ selectedAsset: null }))}><Icon name="Trash" size={14} /></button>
           </div>
         </div>

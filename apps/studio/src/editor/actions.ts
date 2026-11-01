@@ -80,6 +80,8 @@ export const ACTIONS: EditorAction[] = [
   },
   { id: 'file.export.html', label: 'Export game: single HTML file', group: 'File', icon: 'Download', run: () => void exportGame('html') },
   { id: 'file.export.zip', label: 'Export game: ZIP for web hosting', group: 'File', icon: 'Archive', run: () => void exportGame('zip') },
+  { id: 'file.history', label: 'Version history…', group: 'File', icon: 'Clock', run: () => editorHost.openHistory() },
+  { id: 'file.library', label: 'Prefab library…', group: 'File', icon: 'Package', run: () => editorHost.openLibrary() },
   { id: 'file.settings', label: 'Project settings', group: 'File', icon: 'Settings', run: () => editor().set({ rightTab: 'settings' }) },
 
   // ── Edit

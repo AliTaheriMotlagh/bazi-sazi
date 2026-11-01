@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { prop } from '../components/registry';
+import { SHADER_PRESETS, SHADER_VERTEX, shaderFragment } from './shaders';
 import { decodeHeights, flatHeights, terrainMesh } from '../project/terrain';
 import type { ComponentData } from '../types';
 import { DEG2RAD } from '../util';
@@ -47,6 +48,30 @@ function faceCamera(object: THREE.Object3D, camera: THREE.Camera | null): void {
   object.quaternion.copy(_q.multiply(camera.quaternion));
 }
 
+/** A ShaderMaterial from a Shader component (preset or user GLSL). */
+function customMaterial(c: ComponentData) {
+  const preset = prop<string>(c, 'preset');
+  const body = preset === 'custom' ? prop<string>(c, 'code') : (SHADER_PRESETS[preset] ?? SHADER_PRESETS.hologram);
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color(prop<string>(c, 'color')) },
+      uColor2: { value: new THREE.Color(prop<string>(c, 'color2')) },
+      uSpeed: { value: prop<number>(c, 'speed') },
+      uIntensity: { value: prop<number>(c, 'intensity') },
+    },
+    vertexShader: SHADER_VERTEX,
+    fragmentShader: shaderFragment(body),
+    transparent: true,
+    side: THREE.DoubleSide,
+  });
+  return {
+    material,
+    tick: (dt: number) => void (material.uniforms.uTime.value += dt),
+    setColor: (color: string) => (material.uniforms.uColor.value as THREE.Color).set(color),
+  };
+}
+
 function buildMesh(go: GameObject, c: ComponentData, rt: Runtime): Visual {
   let shape = prop<string>(c, 'shape');
   if (shape === 'plane' && rt.mode2d) shape = 'plane2d';
@@ -57,7 +82,9 @@ function buildMesh(go: GameObject, c: ComponentData, rt: Runtime): Visual {
     texture.repeat.set(repeat, repeat);
   }
   const opacity = prop<number>(c, 'opacity');
-  const material = new THREE.MeshStandardMaterial({
+  const shader = go.getComponent('Shader');
+  const custom = shader && shader.enabled !== false ? customMaterial(shader) : null;
+  const material: THREE.MeshStandardMaterial = (custom?.material as unknown as THREE.MeshStandardMaterial) ?? new THREE.MeshStandardMaterial({
     color: prop<string>(c, 'color'),
     map: texture,
     metalness: prop<number>(c, 'metalness'),
@@ -75,7 +102,8 @@ function buildMesh(go: GameObject, c: ComponentData, rt: Runtime): Visual {
   return {
     kind: 'Mesh',
     object: mesh,
-    setColor: (color) => material.color.set(color),
+    update: custom ? (dt) => custom.tick(dt) : undefined,
+    setColor: (color) => (custom ? custom.setColor(color) : material.color.set(color)),
     setOpacity: (o) => {
       material.opacity = o;
       material.transparent = o < 1;

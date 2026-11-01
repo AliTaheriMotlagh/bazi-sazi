@@ -42,6 +42,100 @@ export function projectRoutes(app: FastifyInstance, { db }: AppContext): void {
   const own = async (projectId: string, userId: string) =>
     (await db.prepare('SELECT * FROM projects WHERE id = ? AND owner_id = ?').get(projectId, userId)) as ProjectRow | undefined;
 
+  const MAX_VERSIONS = 40;
+  const AUTO_EVERY_MS = 10 * 60_000;
+  /** Keep a restore point of what is about to be overwritten (auto: at most every 10 minutes). */
+  const snapshot = async (row: ProjectRow, manual: boolean, label: string) => {
+    if (!manual) {
+      const last = await db.prepare('SELECT created_at, data FROM project_versions WHERE project_id = ? ORDER BY created_at DESC LIMIT 1').get(row.id) as { created_at: number; data: string } | undefined;
+      if (last && Date.now() - last.created_at < AUTO_EVERY_MS) return;
+      if (last?.data === row.data) return;
+    }
+    await db.prepare('INSERT INTO project_versions (id, project_id, label, name, data, auto, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id('v_'), row.id, label, row.name, row.data, manual ? 0 : 1, Date.now());
+    await db.prepare(
+      'DELETE FROM project_versions WHERE project_id = ? AND id NOT IN (SELECT id FROM project_versions WHERE project_id = ? ORDER BY created_at DESC LIMIT ?)',
+    ).run(row.id, row.id, MAX_VERSIONS);
+  };
+
+  app.get<{ Params: { id: string } }>('/api/projects/:id/versions', async (req, reply) => {
+    const me = requireUser(req, reply);
+    if (!me) return;
+    if (!(await own(req.params.id, me.sub))) return reply.code(404).send({ error: 'Project not found.' });
+    const rows = await db.prepare('SELECT id, label, name, auto, created_at, LENGTH(data) AS size FROM project_versions WHERE project_id = ? ORDER BY created_at DESC').all(req.params.id) as unknown as { id: string; label: string; name: string; auto: number; created_at: number; size: number }[];
+    return { versions: rows.map((r) => ({ id: r.id, label: r.label, name: r.name, auto: !!r.auto, createdAt: r.created_at, size: r.size })) };
+  });
+
+  app.post<{ Params: { id: string } }>('/api/projects/:id/versions', async (req, reply) => {
+    const me = requireUser(req, reply);
+    if (!me) return;
+    const row = await own(req.params.id, me.sub);
+    if (!row) return reply.code(404).send({ error: 'Project not found.' });
+    const label = String((req.body as { label?: string } | null)?.label ?? '').slice(0, 80) || 'Saved version';
+    await snapshot(row, true, label);
+    return { ok: true };
+  });
+
+  /** Restore a version. The current state is kept as a new version first, so restoring is undoable. */
+  app.post<{ Params: { id: string; vid: string } }>('/api/projects/:id/versions/:vid/restore', async (req, reply) => {
+    const me = requireUser(req, reply);
+    if (!me) return;
+    const row = await own(req.params.id, me.sub);
+    if (!row) return reply.code(404).send({ error: 'Project not found.' });
+    const v = await db.prepare('SELECT data FROM project_versions WHERE id = ? AND project_id = ?').get(req.params.vid, row.id) as { data: string } | undefined;
+    if (!v) return reply.code(404).send({ error: 'Version not found.' });
+    await snapshot(row, true, 'Before restore');
+    const data = { ...JSON.parse(v.data), id: row.id };
+    const now = Date.now();
+    await db.prepare('UPDATE projects SET name = ?, mode = ?, data = ?, updated_at = ? WHERE id = ?').run(data.name, data.settings.mode, JSON.stringify(data), now, row.id);
+    return { ok: true, updatedAt: now, data };
+  });
+
+  // ───────── shared prefab library
+  const PrefabBody = z.object({
+    name: z.string().trim().min(1).max(80),
+    description: z.string().max(500).default(''),
+    mode: z.enum(['2d', '3d']),
+    /** { prefab, assets }: the prefab plus the assets it references (so it works in any project). */
+    data: z.object({ prefab: z.object({ entities: z.array(z.unknown()).min(1).max(500) }).passthrough(), assets: z.array(z.object({ id: z.string(), name: z.string(), type: z.string(), url: z.string() }).passthrough()).max(60) }),
+  });
+
+  app.get<{ Querystring: { q?: string; mode?: string } }>('/api/prefabs', async (req) => {
+    const q = `%${String(req.query.q ?? '').replace(/[%_]/g, '')}%`;
+    const mode = req.query.mode === '2d' || req.query.mode === '3d' ? req.query.mode : null;
+    const rows = await db.prepare(
+      `SELECT p.id, p.name, p.description, p.mode, p.downloads, p.created_at, u.username AS author FROM shared_prefabs p JOIN users u ON u.id = p.owner_id
+       WHERE (p.name LIKE ? OR p.description LIKE ?) AND (? IS NULL OR p.mode = ?) ORDER BY p.downloads DESC, p.created_at DESC LIMIT 60`,
+    ).all(q, q, mode, mode) as unknown as { id: string; name: string; description: string; mode: string; downloads: number; created_at: number; author: string }[];
+    return { prefabs: rows.map((r) => ({ id: r.id, name: r.name, description: r.description, mode: r.mode, downloads: r.downloads, createdAt: r.created_at, author: r.author })) };
+  });
+
+  app.post('/api/prefabs', async (req, reply) => {
+    const me = requireUser(req, reply);
+    if (!me) return;
+    const body = parse(PrefabBody, req.body, reply);
+    if (!body) return;
+    const json = JSON.stringify(body.data);
+    if (json.length > 2_000_000) return reply.code(413).send({ error: 'This prefab is too large to share.' });
+    const prefabId = id('sp_');
+    await db.prepare('INSERT INTO shared_prefabs (id, owner_id, name, description, mode, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(prefabId, me.sub, body.name, body.description, body.mode, json, Date.now());
+    return { id: prefabId };
+  });
+
+  app.get<{ Params: { id: string } }>('/api/prefabs/:id', async (req, reply) => {
+    const row = await db.prepare('SELECT name, mode, data FROM shared_prefabs WHERE id = ?').get(req.params.id) as { name: string; mode: string; data: string } | undefined;
+    if (!row) return reply.code(404).send({ error: 'Prefab not found.' });
+    await db.prepare('UPDATE shared_prefabs SET downloads = downloads + 1 WHERE id = ?').run(req.params.id);
+    return { name: row.name, mode: row.mode, ...JSON.parse(row.data) };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/prefabs/:id', async (req, reply) => {
+    const me = requireUser(req, reply);
+    if (!me) return;
+    const r = await db.prepare('DELETE FROM shared_prefabs WHERE id = ? AND owner_id = ?').run(req.params.id, me.sub);
+    if (!r.changes) return reply.code(404).send({ error: 'Prefab not found.' });
+    return { ok: true };
+  });
+
   app.get('/api/projects', async (req, reply) => {
     const me = requireUser(req, reply);
     if (!me) return;
@@ -95,6 +189,7 @@ export function projectRoutes(app: FastifyInstance, { db }: AppContext): void {
     if (!row) return reply.code(404).send({ error: 'Project not found.' });
     const data = { ...body.data, id: row.id };
     const now = Date.now();
+    await snapshot(row, false, '');
     await db.prepare('UPDATE projects SET name = ?, mode = ?, data = ?, thumbnail = COALESCE(?, thumbnail), updated_at = ? WHERE id = ?').run(
       data.name,
       data.settings.mode,

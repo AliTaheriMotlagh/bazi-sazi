@@ -111,3 +111,25 @@ describe('animator', () => {
     expect(vars.jump).toBe(false);
   });
 });
+
+describe('navigation on terrain', () => {
+  it('blocks steep slopes but not flat ground', async () => {
+    const { NavGrid } = await import('../src/runtime/navgrid');
+    const { GameObject } = await import('../src/runtime/GameObject');
+    const { createEntity, createComponent, encodeHeights, flatHeights, decodeHeights } = await import('../src/core');
+    const res = 32;
+    const levels = decodeHeights(flatHeights(res), res);
+    // A tall wall of terrain across the middle (rows 14..18).
+    for (let y = 14; y <= 18; y++) for (let x = 0; x <= res; x++) levels[y * (res + 1) + x] = 255;
+    const mk = (heights: string) => {
+      const e = createEntity({ name: 'T', components: [createComponent('Terrain', { size: 32, resolution: res, height: 20, heights })] });
+      return new GameObject({ physics: null, mode2d: false, log() {} } as never, e);
+    };
+    const wall = new NavGrid(() => [mk(encodeHeights(levels))], false, 1);
+    const flat = new NavGrid(() => [mk(flatHeights(res))], false, 1);
+    const THREE = await import('three');
+    expect(flat.isWalkable(new THREE.Vector3(0, 0, 0))).toBe(true);
+    expect(wall.pathfinder.blocked.some((b) => b === 1)).toBe(true);
+    expect(flat.pathfinder.blocked.some((b) => b === 1)).toBe(false);
+  });
+});

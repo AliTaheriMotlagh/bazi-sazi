@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { requireUser } from '../auth.ts';
 import type { AppContext } from '../context.ts';
-import { RateLimiter } from '../util.ts';
+import { RateLimiter, id } from '../util.ts';
 
 interface GameRow {
   id: string;
@@ -95,6 +95,19 @@ export function gameRoutes(app: FastifyInstance, { db }: AppContext): void {
       .header('cache-control', 'public, max-age=0, must-revalidate')
       .type('application/json')
       .send(row.data);
+  });
+
+  /** Remix: copy a published game into the signed-in user's projects. */
+  app.post<{ Params: { slug: string } }>('/api/games/:slug/remix', async (req, reply) => {
+    const me = requireUser(req, reply);
+    if (!me) return;
+    const row = await db.prepare('SELECT g.data, g.title, u.username AS author FROM games g JOIN users u ON u.id = g.owner_id WHERE g.slug = ?').get(req.params.slug) as { data: string; title: string; author: string } | undefined;
+    if (!row) return reply.code(404).send({ error: 'Game not found.' });
+    const projectId = id('pr_');
+    const data = { ...JSON.parse(row.data), id: projectId, name: `${row.title} (remix)`.slice(0, 120), description: `Remix of "${row.title}" by ${row.author}` };
+    const now = Date.now();
+    await db.prepare('INSERT INTO projects (id, owner_id, name, mode, data, thumbnail, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)').run(projectId, me.sub, data.name, data.settings.mode, JSON.stringify(data), now, now);
+    return { id: projectId };
   });
 
   app.post<{ Params: { slug: string } }>('/api/games/:slug/play', async (req) => {

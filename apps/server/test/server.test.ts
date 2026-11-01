@@ -166,3 +166,40 @@ describe('game subdomains', () => {
     await site.close();
   });
 });
+
+describe('history, remix and shared prefabs', () => {
+  it('snapshots, restores and shares', async () => {
+    const created = await app.inject({ method: 'POST', url: '/api/projects', headers: auth(), payload: { data: project('History') } });
+    const pid = created.json().id as string;
+    const url = `/api/projects/${pid}`;
+    // First save snapshots the original; a manual version always snapshots.
+    await app.inject({ method: 'PUT', url, headers: auth(), payload: { data: project('History v2') } });
+    await app.inject({ method: 'POST', url: `${url}/versions`, headers: auth(), payload: { label: 'milestone' } });
+    const list = (await app.inject({ method: 'GET', url: `${url}/versions`, headers: auth() })).json().versions as { id: string; label: string; name: string }[];
+    expect(list.map((v) => v.label)).toContain('milestone');
+    const original = list.find((v) => v.name === 'History')!;
+    const restored = await app.inject({ method: 'POST', url: `${url}/versions/${original.id}/restore`, headers: auth() });
+    expect(restored.json().data.name).toBe('History');
+    expect((await app.inject({ method: 'GET', url, headers: auth() })).json().data.name).toBe('History');
+    // Restoring is itself undoable.
+    const after = (await app.inject({ method: 'GET', url: `${url}/versions`, headers: auth() })).json().versions as { label: string }[];
+    expect(after.some((v) => v.label === 'Before restore')).toBe(true);
+
+    const shared = await app.inject({
+      method: 'POST',
+      url: '/api/prefabs',
+      headers: auth(),
+      payload: { name: 'Crate', mode: '3d', data: { prefab: { id: 'p', name: 'Crate', entities: [{ id: 'e' }] }, assets: [] } },
+    });
+    expect(shared.statusCode).toBe(200);
+    expect(((await app.inject({ method: 'GET', url: '/api/prefabs?q=cra' })).json().prefabs as unknown[]).length).toBe(1);
+    expect((await app.inject({ method: 'GET', url: `/api/prefabs/${shared.json().id}` })).json().prefab.name).toBe('Crate');
+    expect((await app.inject({ method: 'POST', url: '/api/prefabs', payload: {} })).statusCode).toBe(401);
+
+    await app.inject({ method: 'POST', url: `${url}/publish`, headers: auth(), payload: { slug: 'remix-src', title: 'Source' } });
+    const remix = await app.inject({ method: 'POST', url: '/api/games/remix-src/remix', headers: auth() });
+    expect(remix.statusCode).toBe(200);
+    const copy = (await app.inject({ method: 'GET', url: `/api/projects/${remix.json().id}`, headers: auth() })).json();
+    expect(copy.data.name).toContain('remix');
+  });
+});

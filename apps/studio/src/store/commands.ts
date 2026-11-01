@@ -304,6 +304,36 @@ export function instantiatePrefab(prefabId: string, position?: Vec3): string | n
   return root.id;
 }
 
+/** The prefab plus every project asset it references, ready to share. */
+export function bundlePrefab(prefabId: string): { prefab: import('@bazi/engine').PrefabData; assets: AssetData[] } | null {
+  const project = editor().project!;
+  const prefab = project.prefabs.find((p) => p.id === prefabId);
+  if (!prefab) return null;
+  const json = JSON.stringify(prefab);
+  return { prefab: structuredClone(prefab), assets: project.assets.filter((a) => json.includes(a.id)).map((a) => ({ id: a.id, name: a.name, type: a.type, url: a.url, size: a.size })) };
+}
+
+/** Add a shared prefab to this project: assets are reused by URL, ids are remapped. */
+export function importPrefabBundle(bundle: { prefab: import('@bazi/engine').PrefabData; assets: AssetData[] }): string {
+  const project = editor().project!;
+  let json = JSON.stringify(bundle.prefab);
+  const additions: AssetData[] = [];
+  for (const a of bundle.assets) {
+    const existing = project.assets.find((x) => x.url === a.url) ?? additions.find((x) => x.url === a.url);
+    const target = existing ?? { ...a, id: uid('a_') };
+    if (!existing) additions.push(target);
+    json = json.split(a.id).join(target.id);
+  }
+  const prefab = JSON.parse(json) as import('@bazi/engine').PrefabData;
+  prefab.id = uid('pf_');
+  prefab.name = uniqueName(project.prefabs.map((p) => p.name), prefab.name);
+  editor().apply(`Import prefab ${prefab.name}`, (d) => {
+    d.assets.push(...additions);
+    d.prefabs.push(prefab);
+  });
+  return prefab.id;
+}
+
 export function renamePrefab(id: string, name: string): void {
   editor().apply('Rename prefab', (d) => {
     const p = d.prefabs.find((x) => x.id === id);
